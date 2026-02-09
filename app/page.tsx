@@ -9,6 +9,7 @@ import { DestinationForm } from "@/components/destination-form"
 import { TimelineView } from "@/components/timeline-view"
 import { TripList } from "@/components/trip-list"
 import { ShareDialog } from "@/components/share-dialog"
+import { ExportItinerary } from "@/components/export-itinerary"
 import { AuthDialog } from "@/components/auth-dialog"
 import { useItinerary } from "@/hooks/use-itinerary"
 import { useAuth } from "@/lib/auth-context"
@@ -35,15 +36,16 @@ function TripPlannerContent() {
   const searchParams = useSearchParams()
   const [showForm, setShowForm] = useState(true)
   const [shareOpen, setShareOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
 
-  // Handle ?trip=ID in URL
+  // Handle ?trip=ID in URL - set the trip and wait for Firestore listener to load it
   useEffect(() => {
     const tripId = searchParams.get("trip")
-    if (tripId && !currentItineraryId) {
+    if (tripId && user && !currentItineraryId) {
       setCurrentItineraryId(tripId)
     }
-  }, [searchParams, currentItineraryId, setCurrentItineraryId])
+  }, [searchParams, user, currentItineraryId, setCurrentItineraryId])
 
   if (authLoading) {
     return (
@@ -203,6 +205,7 @@ function TripPlannerContent() {
         destinationCount={currentItinerary.destinations.length}
         onNameChange={updateItineraryName}
         onShare={() => setShareOpen(true)}
+        onExport={() => setExportOpen(true)}
         onBack={() => setCurrentItineraryId(null)}
         showBack
       />
@@ -291,6 +294,12 @@ function TripPlannerContent() {
         onAddCollaborator={addCollaborator}
         onRemoveCollaborator={removeCollaborator}
         isOwner={isOwner}
+      />
+
+      <ExportItinerary
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        itinerary={currentItinerary}
       />
     </div>
   )
