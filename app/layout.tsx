@@ -17,7 +17,7 @@ const sourceSans = Source_Sans_3({
 })
 
 export const metadata: Metadata = {
-  title: "TripPlan - Planifica tu Viaje",
+  title: "Planner for Trips - Planifica tu Viaje",
   description:
     "Planifica tus itinerarios de viaje con destinos, conexiones y actividades diarias. Comparte y colabora en tiempo real.",
 }

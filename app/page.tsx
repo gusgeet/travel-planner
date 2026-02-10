@@ -26,8 +26,10 @@ function TripPlannerContent() {
     deleteItinerary,
     updateItineraryName,
     addDestination,
+    updateDestination,
     removeDestination,
     addActivity,
+    updateActivity,
     removeActivity,
     addCollaborator,
     removeCollaborator,
@@ -68,7 +70,7 @@ function TripPlannerContent() {
               </div>
               <div>
                 <h1 className="text-xl font-display font-bold text-foreground">
-                  TripPlan
+                  Planner for Trips
                 </h1>
                 <p className="text-xs text-muted-foreground">
                   Planifica y comparte tus viajes
@@ -152,7 +154,7 @@ function TripPlannerContent() {
               </div>
               <div>
                 <h1 className="text-xl font-display font-bold text-foreground">
-                  TripPlan
+                  Planner for Trips
                 </h1>
                 <p className="text-xs text-muted-foreground">
                   Mis viajes
@@ -281,6 +283,8 @@ function TripPlannerContent() {
               destinations={currentItinerary.destinations}
               onAddActivity={addActivity}
               onRemoveActivity={removeActivity}
+              onUpdateActivity={updateActivity}
+              onUpdateDestination={updateDestination}
               onRemoveDestination={removeDestination}
             />
           </div>

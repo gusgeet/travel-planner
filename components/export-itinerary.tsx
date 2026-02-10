@@ -167,7 +167,7 @@ function drawItinerary(
   y += 56
 
   // ── HORIZONTAL TIMELINE BAR ────────────────────────────
-  const barH = 48
+  const barH = 60
   const barY = y
   const barR = 10
   let barX = PAD
@@ -188,19 +188,51 @@ function drawItinerary(
     ctx.fillStyle = color.bar
     ctx.fillRect(barX, barY, segW, barH)
 
-    // Destination name (centered, clipped)
+    const cx = barX + segW / 2
+
+    // Line 1: origin -> destination (two-line layout for readability)
     ctx.fillStyle = "#ffffff"
-    ctx.font = "bold 13px system-ui, sans-serif"
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
-    const label = textEllipsis(ctx, dest.name, segW - 16)
-    ctx.fillText(label, barX + segW / 2, barY + barH / 2 - 8)
 
-    // Date range
+    // Origin
+    ctx.font = "11px system-ui, sans-serif"
+    const originLabel = textEllipsis(ctx, dest.origin, segW / 2 - 14)
+    // Arrow
+    const arrowStr = " \u2192 "
+    // Destination
+    ctx.font = "bold 12px system-ui, sans-serif"
+    const destLabel = textEllipsis(ctx, dest.name, segW / 2 - 14)
+
+    // Measure full line to center it
+    ctx.font = "11px system-ui, sans-serif"
+    const originW = ctx.measureText(originLabel).width
+    const arrowW = ctx.measureText(arrowStr).width
+    ctx.font = "bold 12px system-ui, sans-serif"
+    const destW = ctx.measureText(destLabel).width
+    const fullW = originW + arrowW + destW
+    const startX = cx - fullW / 2
+
+    // Draw origin
+    ctx.font = "11px system-ui, sans-serif"
+    ctx.fillStyle = "rgba(255,255,255,0.9)"
+    ctx.textAlign = "left"
+    ctx.fillText(originLabel, startX, barY + barH / 2 - 10)
+
+    // Draw arrow
+    ctx.fillText(arrowStr, startX + originW, barY + barH / 2 - 10)
+
+    // Draw destination (bold)
+    ctx.font = "bold 12px system-ui, sans-serif"
+    ctx.fillStyle = "#ffffff"
+    ctx.fillText(destLabel, startX + originW + arrowW, barY + barH / 2 - 10)
+
+    // Line 2: Date range
     ctx.font = "10px system-ui, sans-serif"
-    ctx.fillStyle = "rgba(255,255,255,0.85)"
+    ctx.fillStyle = "rgba(255,255,255,0.8)"
+    ctx.textAlign = "center"
     const dateLabel = `${fmtShort(dest.startDate)} - ${fmtShort(dest.endDate)}`
-    ctx.fillText(dateLabel, barX + segW / 2, barY + barH / 2 + 8)
+    ctx.fillText(dateLabel, cx, barY + barH / 2 + 10)
 
     barX += segW
   }
@@ -411,7 +443,7 @@ function drawItinerary(
   ctx.font = "10px system-ui, sans-serif"
   ctx.textAlign = "left"
   ctx.textBaseline = "top"
-  ctx.fillText("Generado con TripPlan", PAD, y)
+  ctx.fillText("Generado con Planner for Trips", PAD, y)
   ctx.textAlign = "right"
   ctx.fillText(
     new Date().toLocaleDateString("es-ES", {
@@ -728,13 +760,13 @@ export function ExportItinerary({
             {/* Timeline bar */}
             <div style={{ marginBottom: 28 }}>
               <div
-                style={{
-                  display: "flex",
-                  borderRadius: 10,
-                  overflow: "hidden",
-                  height: 48,
-                  border: "1px solid #d4cfc8",
-                }}
+              style={{
+                display: "flex",
+                borderRadius: 10,
+                overflow: "hidden",
+                border: "1px solid #d4cfc8",
+                height: 60,
+              }}
               >
                 {itinerary.destinations.map((dest, i) => {
                   const color = PALETTE[i % PALETTE.length]
@@ -758,8 +790,7 @@ export function ExportItinerary({
                     >
                       <span
                         style={{
-                          fontSize: 13,
-                          fontWeight: 700,
+                          fontSize: 12,
                           color: "#fff",
                           lineHeight: 1.2,
                           textOverflow: "ellipsis",
@@ -769,7 +800,9 @@ export function ExportItinerary({
                           textAlign: "center",
                         }}
                       >
-                        {dest.name}
+                        <span style={{ opacity: 0.9 }}>{dest.origin}</span>
+                        <span style={{ opacity: 0.9 }}>{" \u2192 "}</span>
+                        <span style={{ fontWeight: 700 }}>{dest.name}</span>
                       </span>
                       <span
                         style={{
@@ -856,7 +889,7 @@ export function ExportItinerary({
                 color: "#94a3b8",
               }}
             >
-              <span>Generado con TripPlan</span>
+              <span>Generado con Planner for Trips</span>
               <span>
                 {new Date().toLocaleDateString("es-ES", {
                   day: "numeric",

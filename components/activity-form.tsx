@@ -1,20 +1,20 @@
 "use client"
 
 import React from "react"
-
 import { useState } from "react"
-import { Plus, Clock } from "lucide-react"
+import { Plus, Clock, Link2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
 interface ActivityFormProps {
-  onAdd: (activity: { name: string; time?: string; notes?: string }) => void
+  onAdd: (activity: { name: string; time?: string; notes?: string; url?: string }) => void
 }
 
 export function ActivityForm({ onAdd }: ActivityFormProps) {
   const [name, setName] = useState("")
   const [time, setTime] = useState("")
   const [notes, setNotes] = useState("")
+  const [url, setUrl] = useState("")
   const [isExpanded, setIsExpanded] = useState(false)
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -24,10 +24,12 @@ export function ActivityForm({ onAdd }: ActivityFormProps) {
       name: name.trim(),
       time: time || undefined,
       notes: notes.trim() || undefined,
+      url: url.trim() || undefined,
     })
     setName("")
     setTime("")
     setNotes("")
+    setUrl("")
     setIsExpanded(false)
   }
 
@@ -75,6 +77,16 @@ export function ActivityForm({ onAdd }: ActivityFormProps) {
         onChange={(e) => setNotes(e.target.value)}
         className="h-8 text-sm"
       />
+      <div className="relative">
+        <Link2 className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="URL de Google Maps (opcional)"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          className="h-8 pl-8 text-sm"
+          type="url"
+        />
+      </div>
       <div className="flex justify-end gap-2">
         <Button
           type="button"

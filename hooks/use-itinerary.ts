@@ -79,7 +79,17 @@ export function useItinerary() {
 
   // All itineraries merged
   const itineraries = mergeItineraries(ownedItineraries, sharedItineraries)
-  const currentItinerary = itineraries.find((it) => it.id === currentItineraryId) || null
+  const rawCurrentItinerary = itineraries.find((it) => it.id === currentItineraryId) || null
+
+  // Always sort destinations by startDate
+  const currentItinerary = rawCurrentItinerary
+    ? {
+        ...rawCurrentItinerary,
+        destinations: [...rawCurrentItinerary.destinations].sort(
+          (a, b) => a.startDate.localeCompare(b.startDate)
+        ),
+      }
+    : null
 
   // Listen to itineraries the user OWNS
   useEffect(() => {
@@ -264,6 +274,33 @@ export function useItinerary() {
     [currentItinerary, saveItinerary]
   )
 
+  const updateDestination = useCallback(
+    async (destinationId: string, updates: Partial<Omit<Destination, "id" | "dayPlans">>) => {
+      if (!currentItinerary) return
+
+      await saveItinerary({
+        ...currentItinerary,
+        destinations: currentItinerary.destinations.map((d) => {
+          if (d.id !== destinationId) return d
+
+          const updated = { ...d, ...updates }
+
+          // If dates changed, regenerate dayPlans preserving existing activities
+          const newStart = updates.startDate || d.startDate
+          const newEnd = updates.endDate || d.endDate
+          if (updates.startDate || updates.endDate) {
+            const newDays = getDaysBetween(newStart, newEnd)
+            const existingPlanMap = new Map(d.dayPlans.map((dp) => [dp.date, dp]))
+            updated.dayPlans = newDays.map((date) => existingPlanMap.get(date) || { date, activities: [] })
+          }
+
+          return updated
+        }),
+      })
+    },
+    [currentItinerary, saveItinerary]
+  )
+
   const removeDestination = useCallback(
     async (destinationId: string) => {
       if (!currentItinerary) return
@@ -290,6 +327,36 @@ export function useItinerary() {
             dayPlans: d.dayPlans.map((dp) => {
               if (dp.date !== date) return dp
               return { ...dp, activities: [...dp.activities, newActivity] }
+            }),
+          }
+        }),
+      })
+    },
+    [currentItinerary, saveItinerary]
+  )
+
+  const updateActivity = useCallback(
+    async (
+      destinationId: string,
+      date: string,
+      activityId: string,
+      updates: Partial<Omit<Activity, "id">>
+    ) => {
+      if (!currentItinerary) return
+      await saveItinerary({
+        ...currentItinerary,
+        destinations: currentItinerary.destinations.map((d) => {
+          if (d.id !== destinationId) return d
+          return {
+            ...d,
+            dayPlans: d.dayPlans.map((dp) => {
+              if (dp.date !== date) return dp
+              return {
+                ...dp,
+                activities: dp.activities.map((a) =>
+                  a.id === activityId ? { ...a, ...updates } : a
+                ),
+              }
             }),
           }
         }),
@@ -378,8 +445,10 @@ export function useItinerary() {
     deleteItinerary,
     updateItineraryName,
     addDestination,
+    updateDestination,
     removeDestination,
     addActivity,
+    updateActivity,
     removeActivity,
     addCollaborator,
     removeCollaborator,

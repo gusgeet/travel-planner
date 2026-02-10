@@ -3,6 +3,7 @@ export interface Activity {
   name: string
   time?: string
   notes?: string
+  url?: string
 }
 
 export interface DayPlan {

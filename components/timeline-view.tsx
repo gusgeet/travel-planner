@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   MapPin,
   Clock,
@@ -7,10 +8,14 @@ import {
   Plane,
   ArrowRight,
   StickyNote,
+  Pencil,
+  ExternalLink,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ActivityForm } from "@/components/activity-form"
+import { EditDestinationDialog } from "@/components/edit-destination-dialog"
+import { EditActivityDialog } from "@/components/edit-activity-dialog"
 import type { Destination, Activity } from "@/lib/types"
 
 function formatDate(dateStr: string): string {
@@ -48,6 +53,12 @@ const DESTINATION_COLORS = [
   { bg: "bg-chart-5/10", border: "border-chart-5/30", dot: "bg-chart-5", text: "text-chart-5" },
 ]
 
+interface EditingActivity {
+  destinationId: string
+  date: string
+  activity: Activity
+}
+
 interface TimelineViewProps {
   destinations: Destination[]
   onAddActivity: (
@@ -60,6 +71,16 @@ interface TimelineViewProps {
     date: string,
     activityId: string
   ) => void
+  onUpdateActivity: (
+    destinationId: string,
+    date: string,
+    activityId: string,
+    updates: Partial<Omit<Activity, "id">>
+  ) => void
+  onUpdateDestination: (
+    destinationId: string,
+    updates: Partial<Omit<Destination, "id" | "dayPlans">>
+  ) => void
   onRemoveDestination: (destinationId: string) => void
 }
 
@@ -67,8 +88,13 @@ export function TimelineView({
   destinations,
   onAddActivity,
   onRemoveActivity,
+  onUpdateActivity,
+  onUpdateDestination,
   onRemoveDestination,
 }: TimelineViewProps) {
+  const [editingDest, setEditingDest] = useState<Destination | null>(null)
+  const [editingAct, setEditingAct] = useState<EditingActivity | null>(null)
+
   if (destinations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16">
@@ -87,6 +113,36 @@ export function TimelineView({
 
   return (
     <div className="flex flex-col gap-8">
+      {editingDest && (
+        <EditDestinationDialog
+          open={!!editingDest}
+          onOpenChange={(open) => {
+            if (!open) setEditingDest(null)
+          }}
+          destination={editingDest}
+          onSave={onUpdateDestination}
+        />
+      )}
+
+      {editingAct && (
+        <EditActivityDialog
+          open={!!editingAct}
+          onOpenChange={(open) => {
+            if (!open) setEditingAct(null)
+          }}
+          activity={editingAct.activity}
+          onSave={(updates) => {
+            onUpdateActivity(
+              editingAct.destinationId,
+              editingAct.date,
+              editingAct.activity.id,
+              updates
+            )
+            setEditingAct(null)
+          }}
+        />
+      )}
+
       {destinations.map((destination, destIndex) => {
         const colors = DESTINATION_COLORS[destIndex % DESTINATION_COLORS.length]
 
@@ -144,15 +200,26 @@ export function TimelineView({
                   )}
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onRemoveDestination(destination.id)}
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                aria-label={`Eliminar destino ${destination.name}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingDest(destination)}
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label={`Editar destino ${destination.name}`}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemoveDestination(destination.id)}
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  aria-label={`Eliminar destino ${destination.name}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             {/* Day Plans Timeline */}
@@ -198,14 +265,28 @@ export function TimelineView({
                             key={activity.id}
                             className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted"
                           >
-                            <div className="flex items-start gap-2">
+                            <div className="flex items-start gap-2 min-w-0 flex-1">
                               <MapPin
                                 className={`mt-0.5 h-3.5 w-3.5 flex-shrink-0 ${colors.text}`}
                               />
-                              <div className="flex flex-col">
-                                <span className="text-sm font-medium text-foreground">
-                                  {activity.name}
-                                </span>
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sm font-medium text-foreground">
+                                    {activity.name}
+                                  </span>
+                                  {activity.url && (
+                                    <a
+                                      href={activity.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors"
+                                      aria-label={`Ver ${activity.name} en el mapa`}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                  )}
+                                </div>
                                 <div className="flex flex-wrap items-center gap-2">
                                   {activity.time && (
                                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -219,24 +300,53 @@ export function TimelineView({
                                       {activity.notes}
                                     </span>
                                   )}
+                                  {activity.url && (
+                                    <a
+                                      href={activity.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 text-xs text-primary hover:underline truncate max-w-[200px]"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                                      <span className="truncate">Ver en mapa</span>
+                                    </a>
+                                  )}
                                 </div>
                               </div>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                onRemoveActivity(
-                                  destination.id,
-                                  dayPlan.date,
-                                  activity.id
-                                )
-                              }
-                              className="h-6 w-6 p-0 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                              aria-label={`Eliminar actividad ${activity.name}`}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 flex-shrink-0 ml-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setEditingAct({
+                                    destinationId: destination.id,
+                                    date: dayPlan.date,
+                                    activity,
+                                  })
+                                }
+                                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                                aria-label={`Editar actividad ${activity.name}`}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  onRemoveActivity(
+                                    destination.id,
+                                    dayPlan.date,
+                                    activity.id
+                                  )
+                                }
+                                className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                aria-label={`Eliminar actividad ${activity.name}`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
                         ))}
 
