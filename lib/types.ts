@@ -44,4 +44,7 @@ export interface Itinerary {
   collaborators: Collaborator[]
   createdAt: string
   updatedAt: string
+  lastModifiedByUid?: string
+  lastModifiedByName?: string
+  lastModifiedByEmail?: string
 }
