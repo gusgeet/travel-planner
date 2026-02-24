@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect, useRef } from "react"
+import { toast } from "sonner"
 import {
   collection,
   doc,
@@ -76,6 +77,7 @@ export function useItinerary() {
   const [currentItineraryId, setCurrentItineraryId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const resolvedRef = useRef(new Set<string>())
+  const notifiedVersionsRef = useRef(new Map<string, string>())
 
   // All itineraries merged
   const itineraries = mergeItineraries(ownedItineraries, sharedItineraries)
@@ -167,6 +169,60 @@ export function useItinerary() {
     }
   }, [user, sharedItineraries])
 
+
+  useEffect(() => {
+    if (!user) return
+
+    const seenVersions = notifiedVersionsRef.current
+    const activeIds = new Set(itineraries.map((itinerary) => itinerary.id))
+
+    for (const itinerary of itineraries) {
+      const previousVersion = seenVersions.get(itinerary.id)
+
+      if (!previousVersion) {
+        seenVersions.set(itinerary.id, itinerary.updatedAt)
+        continue
+      }
+
+      if (previousVersion === itinerary.updatedAt) continue
+      seenVersions.set(itinerary.id, itinerary.updatedAt)
+
+      if (!itinerary.lastModifiedByUid || itinerary.lastModifiedByUid === user.uid) continue
+
+      const actor = itinerary.lastModifiedByName || itinerary.lastModifiedByEmail || "Otro colaborador"
+      const body = `${actor} actualizó "${itinerary.name}".`
+
+      toast.info(body)
+
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        const showNativeNotification = async () => {
+          const registration = await navigator.serviceWorker.getRegistration()
+          if (registration) {
+            await registration.showNotification("Viaje actualizado", {
+              body,
+              icon: "/placeholder-logo.svg",
+              badge: "/placeholder-logo.svg",
+              data: { url: `/?trip=${itinerary.id}` },
+            })
+            return
+          }
+
+          new Notification("Viaje actualizado", { body })
+        }
+
+        showNativeNotification().catch(() => {
+          // Keep UI responsive if OS-level notifications fail.
+        })
+      }
+    }
+
+    for (const itineraryId of Array.from(seenVersions.keys())) {
+      if (!activeIds.has(itineraryId)) {
+        seenVersions.delete(itineraryId)
+      }
+    }
+  }, [itineraries, user])
+
   // Listen to real-time updates on the current itinerary (covers direct link access)
   useEffect(() => {
     if (!currentItineraryId) return
@@ -206,9 +262,12 @@ export function useItinerary() {
       collaboratorUids,
       collaboratorEmails,
       updatedAt: new Date().toISOString(),
+      lastModifiedByUid: user?.uid || "",
+      lastModifiedByName: user?.displayName || user?.email || "Usuario",
+      lastModifiedByEmail: user?.email || "",
     })
     await setDoc(doc(db, "itineraries", id), cleaned)
-  }, [])
+  }, [user])
 
   const createItinerary = useCallback(
     async (name: string) => {
@@ -224,6 +283,9 @@ export function useItinerary() {
         collaborators: [],
         createdAt: now,
         updatedAt: now,
+        lastModifiedByUid: user.uid,
+        lastModifiedByName: user.displayName || user.email || "Usuario",
+        lastModifiedByEmail: user.email || "",
       }
       await setDoc(doc(db, "itineraries", id), stripUndefined({
         ...newItinerary,

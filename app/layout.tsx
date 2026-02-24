@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next"
 import { Outfit, Source_Sans_3 } from "next/font/google"
 import { Toaster } from "@/components/ui/sonner"
 import { AuthProvider } from "@/lib/auth-context"
+import { PwaInit } from "@/components/pwa-init"
 
 import "./globals.css"
 
@@ -20,6 +21,7 @@ export const metadata: Metadata = {
   title: "Planner for Trips - Planifica tu Viaje",
   description:
     "Planifica tus itinerarios de viaje con destinos, conexiones y actividades diarias. Comparte y colabora en tiempo real.",
+  manifest: "/manifest.webmanifest",
 }
 
 export const viewport: Viewport = {
@@ -35,6 +37,7 @@ export default function RootLayout({
     <html lang="es" className={`${outfit.variable} ${sourceSans.variable}`}>
       <body className="font-sans antialiased">
         <AuthProvider>
+          <PwaInit />
           {children}
           <Toaster position="top-right" />
         </AuthProvider>

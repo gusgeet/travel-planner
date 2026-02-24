@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
 import { AuthDialog } from "@/components/auth-dialog"
+import { PwaControls } from "@/components/pwa-controls"
 
 interface ItineraryHeaderProps {
   name: string
@@ -100,6 +101,8 @@ export function ItineraryHeader({
           </div>
 
           <div className="flex items-center gap-2">
+            <PwaControls />
+
             {onExport && (
               <Button
                 variant="outline"
