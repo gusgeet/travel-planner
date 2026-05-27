@@ -95,16 +95,20 @@ function DraggableActivityItem({
   onEdit,
   onRemove,
 }: DraggableActivityItemProps) {
-  const activityId = `${destinationId}-${date}-${activity.id}`
+  const activityTransferData = JSON.stringify({
+    fromDestId: destinationId,
+    fromDate: date,
+    fromActivityId: activity.id,
+  })
 
   return (
     <div
       draggable
-      id={activityId}
       className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted cursor-grab active:cursor-grabbing"
       onDragStart={(e) => {
         e.dataTransfer!.effectAllowed = "move"
-        e.dataTransfer!.setData("text/plain", activityId)
+        e.dataTransfer!.setData("application/json", activityTransferData)
+        e.dataTransfer!.setData("text/plain", activityTransferData)
       }}
     >
       <div className="flex items-start gap-2 min-w-0 flex-1">
@@ -248,14 +252,27 @@ export function TimelineView({
     toDate: string
   ) => {
     e.preventDefault()
-    const activityId = e.dataTransfer.getData("text/plain")
+    const transferData =
+      e.dataTransfer.getData("application/json") ||
+      e.dataTransfer.getData("text/plain")
 
-    if (!activityId) return
+    if (!transferData) return
 
-    const parts = activityId.split("-")
-    if (parts.length !== 3) return
+    let payload: {
+      fromDestId: string
+      fromDate: string
+      fromActivityId: string
+    }
 
-    const [fromDestId, fromDate, fromActivityId] = parts
+    try {
+      payload = JSON.parse(transferData)
+    } catch {
+      return
+    }
+
+    const { fromDestId, fromDate, fromActivityId } = payload
+
+    if (!fromDestId || !fromDate || !fromActivityId) return
 
     if (fromDestId === toDestId && fromDate === toDate) {
       return
