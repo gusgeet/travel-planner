@@ -458,7 +458,9 @@ export function useItinerary() {
       toDestId: string,
       toDate: string
     ) => {
-      if (!currentItinerary) return
+      if (!currentItinerary) {
+        return
+      }
 
       // Find the activity in the source
       let movedActivity: Activity | null = null
@@ -484,7 +486,9 @@ export function useItinerary() {
         }
       })
 
-      if (!movedActivity) return
+      if (!movedActivity) {
+        return
+      }
 
       // Add the activity to the destination
       const finalDestinations = updatedDestinations.map((d) => {

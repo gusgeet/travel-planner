@@ -11,33 +11,51 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "test",
 }
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+let app
+try {
+  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+} catch (error) {
+  console.warn("[firebase] Could not initialize app:", error)
+}
 
-let authInstance: ReturnType<typeof getAuth> | null = null
-let dbInstance: ReturnType<typeof getFirestore> | null = null
+let authInstance: any = null
+let dbInstance: any = null
 
 export function getAuthInstance() {
-  if (!authInstance) {
+  if (!authInstance && app) {
     try {
       authInstance = getAuth(app)
     } catch (error) {
-      console.error("[firebase] Error initializing auth:", error)
+      console.warn("[firebase] Could not initialize auth:", error)
     }
   }
   return authInstance
 }
 
 export function getDbInstance() {
-  if (!dbInstance) {
+  if (!dbInstance && app) {
     try {
       dbInstance = getFirestore(app)
     } catch (error) {
-      console.error("[firebase] Error initializing firestore:", error)
+      console.warn("[firebase] Could not initialize firestore:", error)
     }
   }
   return dbInstance
 }
 
-// For backwards compatibility
-export const auth = getAuthInstance()
-export const db = getDbInstance()
+// For backwards compatibility - these will be null if Firebase fails
+export const auth = (() => {
+  try {
+    return getAuthInstance()
+  } catch (error) {
+    return null
+  }
+})()
+
+export const db = (() => {
+  try {
+    return getDbInstance()
+  } catch (error) {
+    return null
+  }
+})()
