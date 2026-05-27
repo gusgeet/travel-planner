@@ -13,5 +13,31 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
 
-export const auth = getAuth(app)
-export const db = getFirestore(app)
+let authInstance: ReturnType<typeof getAuth> | null = null
+let dbInstance: ReturnType<typeof getFirestore> | null = null
+
+export function getAuthInstance() {
+  if (!authInstance) {
+    try {
+      authInstance = getAuth(app)
+    } catch (error) {
+      console.error("[firebase] Error initializing auth:", error)
+    }
+  }
+  return authInstance
+}
+
+export function getDbInstance() {
+  if (!dbInstance) {
+    try {
+      dbInstance = getFirestore(app)
+    } catch (error) {
+      console.error("[firebase] Error initializing firestore:", error)
+    }
+  }
+  return dbInstance
+}
+
+// For backwards compatibility
+export const auth = getAuthInstance()
+export const db = getDbInstance()

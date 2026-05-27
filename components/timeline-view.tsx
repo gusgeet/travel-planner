@@ -247,18 +247,35 @@ export function TimelineView({
     if (!over) return
 
     const activeParts = active.id.toString().split("-")
-    const overParts = over.id.toString().split("-")
     
-    // Skip if dropped on an ActivityForm or other non-activity element
-    if (activeParts.length !== 3 || overParts.length < 2) {
+    // Skip if not a valid activity ID (should have destId-date-activityId)
+    if (activeParts.length !== 3) {
       return
     }
 
     const [fromDestId, fromDate, fromActivityId] = activeParts
-    const [toDestId, toDate] = overParts.slice(0, 2)
+    const overStr = over.id.toString()
+    
+    // Check if dropped on a drop zone (destId-date) or another activity (destId-date-activityId)
+    const overParts = overStr.split("-")
+    
+    // Extract destination and date from drop target
+    let toDestId: string
+    let toDate: string
 
+    if (overParts.length === 2) {
+      // Dropped on drop zone
+      [toDestId, toDate] = overParts
+    } else if (overParts.length === 3) {
+      // Dropped on another activity
+      [toDestId, toDate] = overParts.slice(0, 2)
+    } else {
+      // Invalid drop target
+      return
+    }
+
+    // Don't move if dropping in the same location
     if (fromDestId === toDestId && fromDate === toDate) {
-      // Same day, reordering is handled by sortable context
       return
     }
 
@@ -267,11 +284,16 @@ export function TimelineView({
   }
 
   // Collect all activity IDs for global DndContext
-  const allActivityIds = destinations.flatMap((dest) =>
-    dest.dayPlans.flatMap((dayPlan) =>
-      dayPlan.activities.map((activity) => `${dest.id}-${dayPlan.date}-${activity.id}`)
+  const allActivityIds = [
+    ...destinations.flatMap((dest) =>
+      dest.dayPlans.flatMap((dayPlan) => [
+        // Add drop zone for empty days
+        `${dest.id}-${dayPlan.date}`,
+        // Add all activities
+        ...dayPlan.activities.map((activity) => `${dest.id}-${dayPlan.date}-${activity.id}`)
+      ])
     )
-  )
+  ]
 
   if (destinations.length === 0) {
     return (
@@ -436,7 +458,13 @@ export function TimelineView({
                           </div>
 
                           {/* Activities */}
-                          <div className="flex flex-col gap-2">
+                          <div className="flex flex-col gap-2" data-dropzone={`${destination.id}-${dayPlan.date}`}>
+                            {sortedActivities.length === 0 && (
+                              <div 
+                                id={`${destination.id}-${dayPlan.date}`}
+                                className="min-h-8 rounded-md border-2 border-dashed border-transparent"
+                              />
+                            )}
                             {sortedActivities.map((activity) => (
                               <SortableActivityItem
                                 key={activity.id}
