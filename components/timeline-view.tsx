@@ -6,11 +6,20 @@ import {
   Clock,
   Trash2,
   Plane,
-  ArrowRight,
   StickyNote,
   Pencil,
   ExternalLink,
+  GripVertical,
 } from "lucide-react"
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ActivityForm } from "@/components/activity-form"
@@ -45,6 +54,16 @@ function getDayNumber(startDate: string, currentDate: string): number {
   )
 }
 
+// Sort activities: first those without time, then by time ascending
+function sortActivities(activities: Activity[]): Activity[] {
+  return [...activities].sort((a, b) => {
+    if (!a.time && !b.time) return 0
+    if (!a.time) return -1
+    if (!b.time) return 1
+    return a.time.localeCompare(b.time)
+  })
+}
+
 const DESTINATION_COLORS = [
   { bg: "bg-primary/10", border: "border-primary/30", dot: "bg-primary", text: "text-primary" },
   { bg: "bg-accent/10", border: "border-accent/30", dot: "bg-accent", text: "text-accent" },
@@ -57,6 +76,116 @@ interface EditingActivity {
   destinationId: string
   date: string
   activity: Activity
+}
+
+interface DraggableActivityItemProps {
+  activity: Activity
+  destinationId: string
+  date: string
+  colors: typeof DESTINATION_COLORS[0]
+  onEdit: (dest: string, date: string, activity: Activity) => void
+  onRemove: (dest: string, date: string, activityId: string) => void
+}
+
+function DraggableActivityItem({
+  activity,
+  destinationId,
+  date,
+  colors,
+  onEdit,
+  onRemove,
+}: DraggableActivityItemProps) {
+  const activityId = `${destinationId}-${date}-${activity.id}`
+
+  return (
+    <div
+      draggable
+      id={activityId}
+      className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted cursor-grab active:cursor-grabbing"
+      onDragStart={(e) => {
+        e.dataTransfer!.effectAllowed = "move"
+        e.dataTransfer!.setData("text/plain", activityId)
+      }}
+    >
+      <div className="flex items-start gap-2 min-w-0 flex-1">
+        <GripVertical
+          className={`mt-0.5 h-3.5 w-3.5 flex-shrink-0 ${colors.text}`}
+        />
+        <MapPin
+          className={`mt-0.5 h-3.5 w-3.5 flex-shrink-0 ${colors.text}`}
+        />
+        <div className="flex flex-col min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium text-foreground">
+              {activity.name}
+            </span>
+            {activity.url && (
+              <a
+                href={activity.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors"
+                aria-label={`Ver ${activity.name} en el mapa`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {activity.time && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                {activity.time}
+              </span>
+            )}
+            {activity.notes && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <StickyNote className="h-3 w-3" />
+                {activity.notes}
+              </span>
+            )}
+            {activity.url && (
+              <a
+                href={activity.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-primary hover:underline truncate max-w-[200px]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">Ver en mapa</span>
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 flex-shrink-0 ml-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            onEdit(destinationId, date, activity)
+          }
+          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+          aria-label={`Editar actividad ${activity.name}`}
+        >
+          <Pencil className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            onRemove(destinationId, date, activity.id)
+          }
+          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+          aria-label={`Eliminar actividad ${activity.name}`}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 interface TimelineViewProps {
@@ -82,6 +211,13 @@ interface TimelineViewProps {
     updates: Partial<Omit<Destination, "id" | "dayPlans">>
   ) => void
   onRemoveDestination: (destinationId: string) => void
+  onMoveActivity: (
+    fromDestId: string,
+    fromDate: string,
+    activityId: string,
+    toDestId: string,
+    toDate: string
+  ) => void
 }
 
 export function TimelineView({
@@ -91,9 +227,42 @@ export function TimelineView({
   onUpdateActivity,
   onUpdateDestination,
   onRemoveDestination,
+  onMoveActivity,
 }: TimelineViewProps) {
   const [editingDest, setEditingDest] = useState<Destination | null>(null)
   const [editingAct, setEditingAct] = useState<EditingActivity | null>(null)
+  const [draggedActivity, setDraggedActivity] = useState<Activity | null>(null)
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    // Not used with native drag and drop, kept for backwards compatibility
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+  }
+
+  const handleDrop = (
+    e: React.DragEvent<HTMLDivElement>,
+    toDestId: string,
+    toDate: string
+  ) => {
+    e.preventDefault()
+    const activityId = e.dataTransfer.getData("text/plain")
+
+    if (!activityId) return
+
+    const parts = activityId.split("-")
+    if (parts.length !== 3) return
+
+    const [fromDestId, fromDate, fromActivityId] = parts
+
+    if (fromDestId === toDestId && fromDate === toDate) {
+      return
+    }
+
+    onMoveActivity(fromDestId, fromDate, fromActivityId, toDestId, toDate)
+  }
 
   if (destinations.length === 0) {
     return (
@@ -159,10 +328,6 @@ export function TimelineView({
                   >
                     <MapPin className="h-3.5 w-3.5 text-primary-foreground" />
                   </div>
-                  <h2 className="font-display text-lg font-semibold text-foreground">
-                    {destination.origin}
-                  </h2>
-                  <ArrowRight className={`h-4 w-4 ${colors.text}`} />
                   <h2 className="font-display text-lg font-semibold text-foreground">
                     {destination.name}
                   </h2>
@@ -230,6 +395,7 @@ export function TimelineView({
                   dayPlan.date
                 )
                 const isLast = dayIndex === destination.dayPlans.length - 1
+                const sortedActivities = sortActivities(dayPlan.activities)
 
                 return (
                   <div
@@ -259,95 +425,28 @@ export function TimelineView({
                       </div>
 
                       {/* Activities */}
-                      <div className="flex flex-col gap-2">
-                        {dayPlan.activities.map((activity) => (
-                          <div
+                      <div
+                        className="flex flex-col gap-2"
+                        onDragOver={handleDragOver}
+                        onDrop={(e) =>
+                          handleDrop(e, destination.id, dayPlan.date)
+                        }
+                      >
+                        {sortedActivities.length === 0 && (
+                          <div className="min-h-8 rounded-md border-2 border-dashed border-transparent" />
+                        )}
+                        {sortedActivities.map((activity) => (
+                          <DraggableActivityItem
                             key={activity.id}
-                            className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted"
-                          >
-                            <div className="flex items-start gap-2 min-w-0 flex-1">
-                              <MapPin
-                                className={`mt-0.5 h-3.5 w-3.5 flex-shrink-0 ${colors.text}`}
-                              />
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-sm font-medium text-foreground">
-                                    {activity.name}
-                                  </span>
-                                  {activity.url && (
-                                    <a
-                                      href={activity.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors"
-                                      aria-label={`Ver ${activity.name} en el mapa`}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                  )}
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  {activity.time && (
-                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                      <Clock className="h-3 w-3" />
-                                      {activity.time}
-                                    </span>
-                                  )}
-                                  {activity.notes && (
-                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                      <StickyNote className="h-3 w-3" />
-                                      {activity.notes}
-                                    </span>
-                                  )}
-                                  {activity.url && (
-                                    <a
-                                      href={activity.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-1 text-xs text-primary hover:underline truncate max-w-[200px]"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <ExternalLink className="h-3 w-3 flex-shrink-0" />
-                                      <span className="truncate">Ver en mapa</span>
-                                    </a>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 flex-shrink-0 ml-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  setEditingAct({
-                                    destinationId: destination.id,
-                                    date: dayPlan.date,
-                                    activity,
-                                  })
-                                }
-                                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                                aria-label={`Editar actividad ${activity.name}`}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  onRemoveActivity(
-                                    destination.id,
-                                    dayPlan.date,
-                                    activity.id
-                                  )
-                                }
-                                className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                                aria-label={`Eliminar actividad ${activity.name}`}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
+                            activity={activity}
+                            destinationId={destination.id}
+                            date={dayPlan.date}
+                            colors={colors}
+                            onEdit={(destId, date, act) =>
+                              setEditingAct({ destinationId: destId, date, activity: act })
+                            }
+                            onRemove={onRemoveActivity}
+                          />
                         ))}
 
                         <ActivityForm

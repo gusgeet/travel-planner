@@ -450,6 +450,71 @@ export function useItinerary() {
     [currentItinerary, saveItinerary]
   )
 
+  const moveActivity = useCallback(
+    async (
+      fromDestId: string,
+      fromDate: string,
+      activityId: string,
+      toDestId: string,
+      toDate: string
+    ) => {
+      if (!currentItinerary) {
+        return
+      }
+
+      // Find the activity in the source
+      let movedActivity: Activity | null = null
+      const updatedDestinations = currentItinerary.destinations.map((d) => {
+        if (d.id !== fromDestId) return d
+
+        return {
+          ...d,
+          dayPlans: d.dayPlans.map((dp) => {
+            if (dp.date !== fromDate) return dp
+
+            // Find and extract the activity
+            const activity = dp.activities.find((a) => a.id === activityId)
+            if (activity) {
+              movedActivity = activity
+            }
+
+            return {
+              ...dp,
+              activities: dp.activities.filter((a) => a.id !== activityId),
+            }
+          }),
+        }
+      })
+
+      if (!movedActivity) {
+        return
+      }
+
+      // Add the activity to the destination
+      const finalDestinations = updatedDestinations.map((d) => {
+        if (d.id !== toDestId) return d
+
+        return {
+          ...d,
+          dayPlans: d.dayPlans.map((dp) => {
+            if (dp.date !== toDate) return dp
+
+            return {
+              ...dp,
+              activities: [...dp.activities, movedActivity],
+            }
+          }),
+        }
+      })
+
+      await saveItinerary({
+        ...currentItinerary,
+        destinations: finalDestinations,
+      })
+    },
+    [currentItinerary, saveItinerary]
+  )
+
   const addCollaborator = useCallback(
     async (email: string) => {
       if (!currentItinerary || !user) return
@@ -512,6 +577,7 @@ export function useItinerary() {
     addActivity,
     updateActivity,
     removeActivity,
+    moveActivity,
     addCollaborator,
     removeCollaborator,
   }

@@ -2,7 +2,7 @@
 
 import React from "react"
 import { useState } from "react"
-import { MapPin, ArrowRight, Plane, Plus } from "lucide-react"
+import { ArrowRight, Plane, Plus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -36,11 +36,11 @@ export function DestinationForm({ onAdd }: DestinationFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name || !origin || !startDate || !endDate) return
+    if (!name || !startDate || !endDate) return
 
     onAdd({
       name,
-      origin,
+      origin: "", // No longer needed
       startDate: toDateStr(startDate),
       endDate: toDateStr(endDate),
       isConnection,
@@ -56,7 +56,7 @@ export function DestinationForm({ onAdd }: DestinationFormProps) {
   }
 
   const isValid =
-    name && origin && startDate && endDate && startDate <= endDate
+    name && startDate && endDate && startDate <= endDate
 
   return (
     <Card className="border-dashed border-2 border-border bg-card/50">
@@ -68,42 +68,22 @@ export function DestinationForm({ onAdd }: DestinationFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label
-                htmlFor="origin"
-                className="text-sm font-medium text-foreground"
-              >
-                Desde
-              </Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="origin"
-                  placeholder="Ciudad de origen"
-                  value={origin}
-                  onChange={(e) => setOrigin(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label
-                htmlFor="destination"
-                className="text-sm font-medium text-foreground"
-              >
-                Hasta
-              </Label>
-              <div className="relative">
-                <ArrowRight className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
-                <Input
-                  id="destination"
-                  placeholder="Ciudad de destino"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+          <div className="flex flex-col gap-1.5">
+            <Label
+              htmlFor="destination"
+              className="text-sm font-medium text-foreground"
+            >
+              Destino
+            </Label>
+            <div className="relative">
+              <ArrowRight className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+              <Input
+                id="destination"
+                placeholder="Ciudad de destino"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="pl-9"
+              />
             </div>
           </div>
 

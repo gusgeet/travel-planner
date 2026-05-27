@@ -31,6 +31,7 @@ function TripPlannerContent() {
     addActivity,
     updateActivity,
     removeActivity,
+    moveActivity,
     addCollaborator,
     removeCollaborator,
   } = useItinerary()
@@ -227,10 +228,6 @@ function TripPlannerContent() {
                   className="flex items-center gap-1 text-sm"
                 >
                   <span className="font-medium text-foreground">
-                    {dest.origin}
-                  </span>
-                  <span className="text-muted-foreground">{"→"}</span>
-                  <span className="font-medium text-foreground">
                     {dest.name}
                   </span>
                   {dest.isConnection && dest.connection && (
@@ -286,6 +283,7 @@ function TripPlannerContent() {
               onUpdateActivity={updateActivity}
               onUpdateDestination={updateDestination}
               onRemoveDestination={removeDestination}
+              onMoveActivity={moveActivity}
             />
           </div>
         </div>
