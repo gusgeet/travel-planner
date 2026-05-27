@@ -45,6 +45,40 @@ function getDayNumber(startDate: string, currentDate: string): number {
   )
 }
 
+
+
+function parseActivityTimeToMinutes(time?: string): number | null {
+  if (!time) return null
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) return null
+
+  const hours = Number.parseInt(match[1], 10)
+  const minutes = Number.parseInt(match[2], 10)
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
+
+  return hours * 60 + minutes
+}
+
+function sortActivities(activities: Activity[]): Activity[] {
+  return [...activities].sort((a, b) => {
+    const aMinutes = parseActivityTimeToMinutes(a.time)
+    const bMinutes = parseActivityTimeToMinutes(b.time)
+
+    const aHasTime = aMinutes !== null
+    const bHasTime = bMinutes !== null
+
+    if (aHasTime !== bHasTime) {
+      return aHasTime ? 1 : -1
+    }
+
+    if (!aHasTime && !bHasTime) return 0
+
+    return (aMinutes ?? 0) - (bMinutes ?? 0)
+  })
+}
+
 const DESTINATION_COLORS = [
   { bg: "bg-primary/10", border: "border-primary/30", dot: "bg-primary", text: "text-primary" },
   { bg: "bg-accent/10", border: "border-accent/30", dot: "bg-accent", text: "text-accent" },
@@ -261,6 +295,7 @@ export function TimelineView({
             {/* Day Plans Timeline */}
             <div className="rounded-b-lg border border-t-0 border-border bg-card">
               {destination.dayPlans.map((dayPlan, dayIndex) => {
+                const sortedActivities = sortActivities(dayPlan.activities)
                 const dayNum = getDayNumber(
                   destination.startDate,
                   dayPlan.date
@@ -300,7 +335,7 @@ export function TimelineView({
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => handleDropActivity(destination.id, dayPlan.date)}
                       >
-                        {dayPlan.activities.map((activity) => (
+                        {sortedActivities.map((activity) => (
                           <div
                             key={activity.id}
                             className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted cursor-grab active:cursor-grabbing"
