@@ -36,7 +36,7 @@ export function DestinationForm({ onAdd }: DestinationFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name || !origin || !startDate || !endDate) return
+    if (!origin || !startDate || !endDate) return
 
     onAdd({
       name,
@@ -56,7 +56,7 @@ export function DestinationForm({ onAdd }: DestinationFormProps) {
   }
 
   const isValid =
-    name && origin && startDate && endDate && startDate <= endDate
+    origin && startDate && endDate && startDate <= endDate
 
   return (
     <Card className="border-dashed border-2 border-border bg-card/50">
@@ -74,7 +74,7 @@ export function DestinationForm({ onAdd }: DestinationFormProps) {
                 htmlFor="origin"
                 className="text-sm font-medium text-foreground"
               >
-                Desde
+                Destino
               </Label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -87,7 +87,7 @@ export function DestinationForm({ onAdd }: DestinationFormProps) {
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-1.5">
+            {/* <div className="flex flex-col gap-1.5">
               <Label
                 htmlFor="destination"
                 className="text-sm font-medium text-foreground"
@@ -104,7 +104,7 @@ export function DestinationForm({ onAdd }: DestinationFormProps) {
                   className="pl-9"
                 />
               </div>
-            </div>
+            </div> */}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">

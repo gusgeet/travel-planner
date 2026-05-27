@@ -255,11 +255,7 @@ export function TimelineView({
                   <h2 className="font-display text-lg font-semibold text-foreground">
                     {destination.origin}
                   </h2>
-                  <ArrowRight className={`h-4 w-4 ${colors.text}`} />
-                  <h2 className="font-display text-lg font-semibold text-foreground">
-                    {destination.name}
-                  </h2>
-                  {destination.isConnection && destination.connection && (
+                    {destination.isConnection && destination.connection && (
                     <Badge
                       variant="secondary"
                       className="flex items-center gap-1 text-xs"
