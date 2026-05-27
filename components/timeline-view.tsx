@@ -246,17 +246,32 @@ export function TimelineView({
 
     if (!over) return
 
-    const [fromDestId, fromDate, fromActivityId] = active.id.toString().split("-")
-    const [toDestId, toDate] = over.id.toString().split("-").slice(0, 2)
+    const activeParts = active.id.toString().split("-")
+    const overParts = over.id.toString().split("-")
+    
+    // Skip if dropped on an ActivityForm or other non-activity element
+    if (activeParts.length !== 3 || overParts.length < 2) {
+      return
+    }
+
+    const [fromDestId, fromDate, fromActivityId] = activeParts
+    const [toDestId, toDate] = overParts.slice(0, 2)
 
     if (fromDestId === toDestId && fromDate === toDate) {
-      // Same day, just reorder (handled by sortable context internally)
+      // Same day, reordering is handled by sortable context
       return
     }
 
     // Moving to a different day
     onMoveActivity(fromDestId, fromDate, fromActivityId, toDestId, toDate)
   }
+
+  // Collect all activity IDs for global DndContext
+  const allActivityIds = destinations.flatMap((dest) =>
+    dest.dayPlans.flatMap((dayPlan) =>
+      dayPlan.activities.map((activity) => `${dest.id}-${dayPlan.date}-${activity.id}`)
+    )
+  )
 
   if (destinations.length === 0) {
     return (
@@ -276,158 +291,151 @@ export function TimelineView({
 
   return (
     <DndContext onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
-      <div className="flex flex-col gap-8">
-        {editingDest && (
-          <EditDestinationDialog
-            open={!!editingDest}
-            onOpenChange={(open) => {
-              if (!open) setEditingDest(null)
-            }}
-            destination={editingDest}
-            onSave={onUpdateDestination}
-          />
-        )}
+      <SortableContext items={allActivityIds} strategy={verticalListSortingStrategy}>
+        <div className="flex flex-col gap-8">
+          {editingDest && (
+            <EditDestinationDialog
+              open={!!editingDest}
+              onOpenChange={(open) => {
+                if (!open) setEditingDest(null)
+              }}
+              destination={editingDest}
+              onSave={onUpdateDestination}
+            />
+          )}
 
-        {editingAct && (
-          <EditActivityDialog
-            open={!!editingAct}
-            onOpenChange={(open) => {
-              if (!open) setEditingAct(null)
-            }}
-            activity={editingAct.activity}
-            onSave={(updates) => {
-              onUpdateActivity(
-                editingAct.destinationId,
-                editingAct.date,
-                editingAct.activity.id,
-                updates
-              )
-              setEditingAct(null)
-            }}
-          />
-        )}
+          {editingAct && (
+            <EditActivityDialog
+              open={!!editingAct}
+              onOpenChange={(open) => {
+                if (!open) setEditingAct(null)
+              }}
+              activity={editingAct.activity}
+              onSave={(updates) => {
+                onUpdateActivity(
+                  editingAct.destinationId,
+                  editingAct.date,
+                  editingAct.activity.id,
+                  updates
+                )
+                setEditingAct(null)
+              }}
+            />
+          )}
 
-        {destinations.map((destination, destIndex) => {
-          const colors = DESTINATION_COLORS[destIndex % DESTINATION_COLORS.length]
+          {destinations.map((destination, destIndex) => {
+            const colors = DESTINATION_COLORS[destIndex % DESTINATION_COLORS.length]
 
-          return (
-            <div key={destination.id} className="flex flex-col gap-0">
-              {/* Destination Header */}
-              <div
-                className={`flex items-center justify-between rounded-t-lg border ${colors.border} ${colors.bg} px-4 py-3 md:px-5`}
-              >
-                <div className="flex flex-col gap-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div
-                      className={`flex h-7 w-7 items-center justify-center rounded-full ${colors.dot}`}
-                    >
-                      <MapPin className="h-3.5 w-3.5 text-primary-foreground" />
-                    </div>
-                    <h2 className="font-display text-lg font-semibold text-foreground">
-                      {destination.name}
-                    </h2>
-                    {destination.isConnection && destination.connection && (
-                      <Badge
-                        variant="secondary"
-                        className="flex items-center gap-1 text-xs"
+            return (
+              <div key={destination.id} className="flex flex-col gap-0">
+                {/* Destination Header */}
+                <div
+                  className={`flex items-center justify-between rounded-t-lg border ${colors.border} ${colors.bg} px-4 py-3 md:px-5`}
+                >
+                  <div className="flex flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div
+                        className={`flex h-7 w-7 items-center justify-center rounded-full ${colors.dot}`}
                       >
-                        <Plane className="h-3 w-3" />
-                        {"Conexion a "}
-                        {destination.connection.destination}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                    <span>
-                      {formatShortDate(destination.startDate)}
-                      {" - "}
-                      {formatShortDate(destination.endDate)}
-                    </span>
-                    <span className="text-xs">
-                      {"("}
-                      {destination.dayPlans.length}
-                      {" dia"}
-                      {destination.dayPlans.length > 1 ? "s" : ""}
-                      {")"}
-                    </span>
-                    {destination.isConnection && destination.connection?.airline && (
-                      <span className="text-xs">
-                        {destination.connection.airline}
-                        {destination.connection.flightNumber
-                          ? ` - ${destination.connection.flightNumber}`
-                          : ""}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingDest(destination)}
-                    className="text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label={`Editar destino ${destination.name}`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onRemoveDestination(destination.id)}
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    aria-label={`Eliminar destino ${destination.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Day Plans Timeline */}
-              <div className="rounded-b-lg border border-t-0 border-border bg-card">
-                {destination.dayPlans.map((dayPlan, dayIndex) => {
-                  const dayNum = getDayNumber(
-                    destination.startDate,
-                    dayPlan.date
-                  )
-                  const isLast = dayIndex === destination.dayPlans.length - 1
-                  const sortedActivities = sortActivities(dayPlan.activities)
-                  const activityIds = sortedActivities.map(
-                    (a) => `${destination.id}-${dayPlan.date}-${a.id}`
-                  )
-
-                  return (
-                    <div
-                      key={dayPlan.date}
-                      className={`flex ${!isLast ? "border-b border-border" : ""}`}
-                    >
-                      {/* Timeline line */}
-                      <div className="relative flex w-16 flex-shrink-0 flex-col items-center py-4 md:w-20">
-                        <div
-                          className={`z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 ${colors.border} bg-card text-xs font-semibold ${colors.text}`}
-                        >
-                          {dayNum}
-                        </div>
-                        {!isLast && (
-                          <div
-                            className={`absolute bottom-0 top-12 w-0.5 ${colors.dot} opacity-20`}
-                          />
-                        )}
+                        <MapPin className="h-3.5 w-3.5 text-primary-foreground" />
                       </div>
+                      <h2 className="font-display text-lg font-semibold text-foreground">
+                        {destination.name}
+                      </h2>
+                      {destination.isConnection && destination.connection && (
+                        <Badge
+                          variant="secondary"
+                          className="flex items-center gap-1 text-xs"
+                        >
+                          <Plane className="h-3 w-3" />
+                          {"Conexion a "}
+                          {destination.connection.destination}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                      <span>
+                        {formatShortDate(destination.startDate)}
+                        {" - "}
+                        {formatShortDate(destination.endDate)}
+                      </span>
+                      <span className="text-xs">
+                        {"("}
+                        {destination.dayPlans.length}
+                        {" dia"}
+                        {destination.dayPlans.length > 1 ? "s" : ""}
+                        {")"}
+                      </span>
+                      {destination.isConnection && destination.connection?.airline && (
+                        <span className="text-xs">
+                          {destination.connection.airline}
+                          {destination.connection.flightNumber
+                            ? ` - ${destination.connection.flightNumber}`
+                            : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingDest(destination)}
+                      className="text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label={`Editar destino ${destination.name}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onRemoveDestination(destination.id)}
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      aria-label={`Eliminar destino ${destination.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
 
-                      {/* Day content */}
-                      <div className="flex-1 py-4 pr-4 md:pr-5">
-                        <div className="mb-3 flex items-baseline gap-2">
-                          <span className="text-sm font-semibold text-foreground capitalize">
-                            {formatDate(dayPlan.date)}
-                          </span>
+                {/* Day Plans Timeline */}
+                <div className="rounded-b-lg border border-t-0 border-border bg-card">
+                  {destination.dayPlans.map((dayPlan, dayIndex) => {
+                    const dayNum = getDayNumber(
+                      destination.startDate,
+                      dayPlan.date
+                    )
+                    const isLast = dayIndex === destination.dayPlans.length - 1
+                    const sortedActivities = sortActivities(dayPlan.activities)
+
+                    return (
+                      <div
+                        key={dayPlan.date}
+                        className={`flex ${!isLast ? "border-b border-border" : ""}`}
+                      >
+                        {/* Timeline line */}
+                        <div className="relative flex w-16 flex-shrink-0 flex-col items-center py-4 md:w-20">
+                          <div
+                            className={`z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 ${colors.border} bg-card text-xs font-semibold ${colors.text}`}
+                          >
+                            {dayNum}
+                          </div>
+                          {!isLast && (
+                            <div
+                              className={`absolute bottom-0 top-12 w-0.5 ${colors.dot} opacity-20`}
+                            />
+                          )}
                         </div>
 
-                        {/* Activities */}
-                        <SortableContext
-                          items={activityIds}
-                          strategy={verticalListSortingStrategy}
-                          id={`${destination.id}-${dayPlan.date}`}
-                        >
+                        {/* Day content */}
+                        <div className="flex-1 py-4 pr-4 md:pr-5">
+                          <div className="mb-3 flex items-baseline gap-2">
+                            <span className="text-sm font-semibold text-foreground capitalize">
+                              {formatDate(dayPlan.date)}
+                            </span>
+                          </div>
+
+                          {/* Activities */}
                           <div className="flex flex-col gap-2">
                             {sortedActivities.map((activity) => (
                               <SortableActivityItem
@@ -453,16 +461,16 @@ export function TimelineView({
                               }
                             />
                           </div>
-                        </SortableContext>
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      </SortableContext>
       <DragOverlay>
         {draggedActivity ? <div>Moviendo actividad...</div> : null}
       </DragOverlay>
