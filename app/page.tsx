@@ -31,6 +31,7 @@ function TripPlannerContent() {
     addActivity,
     updateActivity,
     removeActivity,
+    moveActivity,
     addCollaborator,
     removeCollaborator,
   } = useItinerary()
@@ -284,6 +285,7 @@ function TripPlannerContent() {
               onAddActivity={addActivity}
               onRemoveActivity={removeActivity}
               onUpdateActivity={updateActivity}
+              onMoveActivity={moveActivity}
               onUpdateDestination={updateDestination}
               onRemoveDestination={removeDestination}
             />

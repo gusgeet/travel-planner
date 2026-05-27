@@ -427,6 +427,69 @@ export function useItinerary() {
     [currentItinerary, saveItinerary]
   )
 
+
+  const moveActivity = useCallback(
+    async (
+      sourceDestinationId: string,
+      sourceDate: string,
+      targetDestinationId: string,
+      targetDate: string,
+      activityId: string
+    ) => {
+      if (!currentItinerary) return
+
+      let activityToMove: Activity | null = null
+
+      const destinations = currentItinerary.destinations.map((destination) => {
+        if (destination.id !== sourceDestinationId) return destination
+
+        return {
+          ...destination,
+          dayPlans: destination.dayPlans.map((dayPlan) => {
+            if (dayPlan.date !== sourceDate) return dayPlan
+
+            const nextActivities = dayPlan.activities.filter((activity) => {
+              const isMovingActivity = activity.id === activityId
+              if (isMovingActivity) activityToMove = activity
+              return !isMovingActivity
+            })
+
+            return { ...dayPlan, activities: nextActivities }
+          }),
+        }
+      })
+
+      if (!activityToMove) return
+
+      const updatedDestinations = destinations.map((destination) => {
+        if (destination.id !== targetDestinationId) return destination
+
+        return {
+          ...destination,
+          dayPlans: destination.dayPlans.map((dayPlan) => {
+            if (dayPlan.date !== targetDate) return dayPlan
+
+            const alreadyExists = dayPlan.activities.some(
+              (activity) => activity.id === activityToMove!.id
+            )
+
+            if (alreadyExists) return dayPlan
+
+            return {
+              ...dayPlan,
+              activities: [...dayPlan.activities, activityToMove!],
+            }
+          }),
+        }
+      })
+
+      await saveItinerary({
+        ...currentItinerary,
+        destinations: updatedDestinations,
+      })
+    },
+    [currentItinerary, saveItinerary]
+  )
   const removeActivity = useCallback(
     async (destinationId: string, date: string, activityId: string) => {
       if (!currentItinerary) return
@@ -512,6 +575,7 @@ export function useItinerary() {
     addActivity,
     updateActivity,
     removeActivity,
+    moveActivity,
     addCollaborator,
     removeCollaborator,
   }
