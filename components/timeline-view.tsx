@@ -45,6 +45,40 @@ function getDayNumber(startDate: string, currentDate: string): number {
   )
 }
 
+
+
+function parseActivityTimeToMinutes(time?: string): number | null {
+  if (!time) return null
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) return null
+
+  const hours = Number.parseInt(match[1], 10)
+  const minutes = Number.parseInt(match[2], 10)
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
+
+  return hours * 60 + minutes
+}
+
+function sortActivities(activities: Activity[]): Activity[] {
+  return [...activities].sort((a, b) => {
+    const aMinutes = parseActivityTimeToMinutes(a.time)
+    const bMinutes = parseActivityTimeToMinutes(b.time)
+
+    const aHasTime = aMinutes !== null
+    const bHasTime = bMinutes !== null
+
+    if (aHasTime !== bHasTime) {
+      return aHasTime ? 1 : -1
+    }
+
+    if (!aHasTime && !bHasTime) return 0
+
+    return (aMinutes ?? 0) - (bMinutes ?? 0)
+  })
+}
+
 const DESTINATION_COLORS = [
   { bg: "bg-primary/10", border: "border-primary/30", dot: "bg-primary", text: "text-primary" },
   { bg: "bg-accent/10", border: "border-accent/30", dot: "bg-accent", text: "text-accent" },
@@ -57,6 +91,12 @@ interface EditingActivity {
   destinationId: string
   date: string
   activity: Activity
+}
+
+interface DraggedActivity {
+  sourceDestinationId: string
+  sourceDate: string
+  activityId: string
 }
 
 interface TimelineViewProps {
@@ -77,6 +117,13 @@ interface TimelineViewProps {
     activityId: string,
     updates: Partial<Omit<Activity, "id">>
   ) => void
+  onMoveActivity: (
+    sourceDestinationId: string,
+    sourceDate: string,
+    targetDestinationId: string,
+    targetDate: string,
+    activityId: string
+  ) => void
   onUpdateDestination: (
     destinationId: string,
     updates: Partial<Omit<Destination, "id" | "dayPlans">>
@@ -89,11 +136,34 @@ export function TimelineView({
   onAddActivity,
   onRemoveActivity,
   onUpdateActivity,
+  onMoveActivity,
   onUpdateDestination,
   onRemoveDestination,
 }: TimelineViewProps) {
   const [editingDest, setEditingDest] = useState<Destination | null>(null)
   const [editingAct, setEditingAct] = useState<EditingActivity | null>(null)
+  const [draggedActivity, setDraggedActivity] = useState<DraggedActivity | null>(null)
+
+
+  const handleDropActivity = (destinationId: string, date: string) => {
+    if (!draggedActivity) return
+
+    const isSameSlot =
+      draggedActivity.sourceDestinationId === destinationId &&
+      draggedActivity.sourceDate === date
+
+    if (!isSameSlot) {
+      onMoveActivity(
+        draggedActivity.sourceDestinationId,
+        draggedActivity.sourceDate,
+        destinationId,
+        date,
+        draggedActivity.activityId
+      )
+    }
+
+    setDraggedActivity(null)
+  }
 
   if (destinations.length === 0) {
     return (
@@ -225,6 +295,7 @@ export function TimelineView({
             {/* Day Plans Timeline */}
             <div className="rounded-b-lg border border-t-0 border-border bg-card">
               {destination.dayPlans.map((dayPlan, dayIndex) => {
+                const sortedActivities = sortActivities(dayPlan.activities)
                 const dayNum = getDayNumber(
                   destination.startDate,
                   dayPlan.date
@@ -259,11 +330,24 @@ export function TimelineView({
                       </div>
 
                       {/* Activities */}
-                      <div className="flex flex-col gap-2">
-                        {dayPlan.activities.map((activity) => (
+                      <div
+                        className="flex flex-col gap-2"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => handleDropActivity(destination.id, dayPlan.date)}
+                      >
+                        {sortedActivities.map((activity) => (
                           <div
                             key={activity.id}
-                            className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted"
+                            className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted cursor-grab active:cursor-grabbing"
+                            draggable
+                            onDragStart={() =>
+                              setDraggedActivity({
+                                sourceDestinationId: destination.id,
+                                sourceDate: dayPlan.date,
+                                activityId: activity.id,
+                              })
+                            }
+                            onDragEnd={() => setDraggedActivity(null)}
                           >
                             <div className="flex items-start gap-2 min-w-0 flex-1">
                               <MapPin
