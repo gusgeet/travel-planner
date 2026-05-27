@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import {
   MapPin,
   Clock,
@@ -78,6 +78,12 @@ interface EditingActivity {
   activity: Activity
 }
 
+interface DraggedActivityContext {
+  fromDestId: string
+  fromDate: string
+  fromActivityId: string
+}
+
 interface DraggableActivityItemProps {
   activity: Activity
   destinationId: string
@@ -85,6 +91,7 @@ interface DraggableActivityItemProps {
   colors: typeof DESTINATION_COLORS[0]
   onEdit: (dest: string, date: string, activity: Activity) => void
   onRemove: (dest: string, date: string, activityId: string) => void
+  onDragStart: (context: DraggedActivityContext) => void
 }
 
 function DraggableActivityItem({
@@ -94,21 +101,23 @@ function DraggableActivityItem({
   colors,
   onEdit,
   onRemove,
+  onDragStart,
 }: DraggableActivityItemProps) {
-  const activityTransferData = JSON.stringify({
-    fromDestId: destinationId,
-    fromDate: date,
-    fromActivityId: activity.id,
-  })
-
   return (
     <div
       draggable
       className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted cursor-grab active:cursor-grabbing"
       onDragStart={(e) => {
-        e.dataTransfer!.effectAllowed = "move"
-        e.dataTransfer!.setData("application/json", activityTransferData)
-        e.dataTransfer!.setData("text/plain", activityTransferData)
+        const context: DraggedActivityContext = {
+          fromDestId: destinationId,
+          fromDate: date,
+          fromActivityId: activity.id,
+        }
+
+        onDragStart(context)
+
+        e.dataTransfer.effectAllowed = "move"
+        e.dataTransfer.setData("text/plain", JSON.stringify(context))
       }}
     >
       <div className="flex items-start gap-2 min-w-0 flex-1">
@@ -235,10 +244,14 @@ export function TimelineView({
 }: TimelineViewProps) {
   const [editingDest, setEditingDest] = useState<Destination | null>(null)
   const [editingAct, setEditingAct] = useState<EditingActivity | null>(null)
-  const [draggedActivity, setDraggedActivity] = useState<Activity | null>(null)
+  const [draggedActivityContext, setDraggedActivityContext] =
+    useState<DraggedActivityContext | null>(null)
+  const draggedActivityContextRef = useRef<DraggedActivityContext | null>(null)
 
   const handleDragEnd = (event: DragEndEvent) => {
     // Not used with native drag and drop, kept for backwards compatibility
+    setDraggedActivityContext(null)
+    draggedActivityContextRef.current = null
   }
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -246,33 +259,26 @@ export function TimelineView({
     e.dataTransfer.dropEffect = "move"
   }
 
+  const handleNativeDragStart = useCallback((context: DraggedActivityContext) => {
+    draggedActivityContextRef.current = context
+    setDraggedActivityContext(context)
+  }, [])
+
   const handleDrop = (
     e: React.DragEvent<HTMLDivElement>,
     toDestId: string,
     toDate: string
   ) => {
     e.preventDefault()
-    const transferData =
-      e.dataTransfer.getData("application/json") ||
-      e.dataTransfer.getData("text/plain")
 
-    if (!transferData) return
+    const fromContext = draggedActivityContextRef.current || draggedActivityContext
 
-    let payload: {
-      fromDestId: string
-      fromDate: string
-      fromActivityId: string
-    }
+    setDraggedActivityContext(null)
+    draggedActivityContextRef.current = null
 
-    try {
-      payload = JSON.parse(transferData)
-    } catch {
-      return
-    }
+    if (!fromContext) return
 
-    const { fromDestId, fromDate, fromActivityId } = payload
-
-    if (!fromDestId || !fromDate || !fromActivityId) return
+    const { fromDestId, fromDate, fromActivityId } = fromContext
 
     if (fromDestId === toDestId && fromDate === toDate) {
       return
@@ -463,6 +469,7 @@ export function TimelineView({
                               setEditingAct({ destinationId: destId, date, activity: act })
                             }
                             onRemove={onRemoveActivity}
+                            onDragStart={handleNativeDragStart}
                           />
                         ))}
 
