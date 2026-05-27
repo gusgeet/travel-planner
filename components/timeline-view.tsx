@@ -59,6 +59,12 @@ interface EditingActivity {
   activity: Activity
 }
 
+interface DraggedActivity {
+  sourceDestinationId: string
+  sourceDate: string
+  activityId: string
+}
+
 interface TimelineViewProps {
   destinations: Destination[]
   onAddActivity: (
@@ -77,6 +83,13 @@ interface TimelineViewProps {
     activityId: string,
     updates: Partial<Omit<Activity, "id">>
   ) => void
+  onMoveActivity: (
+    sourceDestinationId: string,
+    sourceDate: string,
+    targetDestinationId: string,
+    targetDate: string,
+    activityId: string
+  ) => void
   onUpdateDestination: (
     destinationId: string,
     updates: Partial<Omit<Destination, "id" | "dayPlans">>
@@ -89,11 +102,34 @@ export function TimelineView({
   onAddActivity,
   onRemoveActivity,
   onUpdateActivity,
+  onMoveActivity,
   onUpdateDestination,
   onRemoveDestination,
 }: TimelineViewProps) {
   const [editingDest, setEditingDest] = useState<Destination | null>(null)
   const [editingAct, setEditingAct] = useState<EditingActivity | null>(null)
+  const [draggedActivity, setDraggedActivity] = useState<DraggedActivity | null>(null)
+
+
+  const handleDropActivity = (destinationId: string, date: string) => {
+    if (!draggedActivity) return
+
+    const isSameSlot =
+      draggedActivity.sourceDestinationId === destinationId &&
+      draggedActivity.sourceDate === date
+
+    if (!isSameSlot) {
+      onMoveActivity(
+        draggedActivity.sourceDestinationId,
+        draggedActivity.sourceDate,
+        destinationId,
+        date,
+        draggedActivity.activityId
+      )
+    }
+
+    setDraggedActivity(null)
+  }
 
   if (destinations.length === 0) {
     return (
@@ -259,11 +295,24 @@ export function TimelineView({
                       </div>
 
                       {/* Activities */}
-                      <div className="flex flex-col gap-2">
+                      <div
+                        className="flex flex-col gap-2"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => handleDropActivity(destination.id, dayPlan.date)}
+                      >
                         {dayPlan.activities.map((activity) => (
                           <div
                             key={activity.id}
-                            className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted"
+                            className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted cursor-grab active:cursor-grabbing"
+                            draggable
+                            onDragStart={() =>
+                              setDraggedActivity({
+                                sourceDestinationId: destination.id,
+                                sourceDate: dayPlan.date,
+                                activityId: activity.id,
+                              })
+                            }
+                            onDragEnd={() => setDraggedActivity(null)}
                           >
                             <div className="flex items-start gap-2 min-w-0 flex-1">
                               <MapPin
