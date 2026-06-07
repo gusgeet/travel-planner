@@ -32,6 +32,7 @@ function TripPlannerContent() {
     updateActivity,
     removeActivity,
     moveActivity,
+    reorderActivity,
     addCollaborator,
     removeCollaborator,
   } = useItinerary()
@@ -284,6 +285,7 @@ function TripPlannerContent() {
               onUpdateDestination={updateDestination}
               onRemoveDestination={removeDestination}
               onMoveActivity={moveActivity}
+              onReorderActivity={reorderActivity}
             />
           </div>
         </div>

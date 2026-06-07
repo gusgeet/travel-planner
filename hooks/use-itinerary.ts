@@ -379,7 +379,11 @@ export function useItinerary() {
   const addActivity = useCallback(
     async (destinationId: string, date: string, activity: Omit<Activity, "id">) => {
       if (!currentItinerary) return
-      const newActivity: Activity = { ...activity, id: generateId() }
+      const dest = currentItinerary.destinations.find(d => d.id === destinationId)
+      const dayPlan = dest?.dayPlans.find(dp => dp.date === date)
+      const order = dayPlan?.activities.length ?? 0
+      
+      const newActivity: Activity = { ...activity, id: generateId(), order }
       await saveItinerary({
         ...currentItinerary,
         destinations: currentItinerary.destinations.map((d) => {
@@ -515,6 +519,56 @@ export function useItinerary() {
     [currentItinerary, saveItinerary]
   )
 
+  const reorderActivity = useCallback(
+    async (
+      destinationId: string,
+      date: string,
+      activityId: string,
+      newIndex: number
+    ) => {
+      if (!currentItinerary) return
+
+      const updatedDestinations = currentItinerary.destinations.map((d) => {
+        if (d.id !== destinationId) return d
+
+        return {
+          ...d,
+          dayPlans: d.dayPlans.map((dp) => {
+            if (dp.date !== date) return dp
+
+            // Find the activity and remove it
+            const activity = dp.activities.find((a) => a.id === activityId)
+            if (!activity) return dp
+
+            const withoutActivity = dp.activities.filter((a) => a.id !== activityId)
+            
+            // Insert at new index and update all order values
+            const newActivities = [
+              ...withoutActivity.slice(0, newIndex),
+              { ...activity, order: newIndex },
+              ...withoutActivity.slice(newIndex),
+            ]
+
+            // Update order for all activities
+            return {
+              ...dp,
+              activities: newActivities.map((act, idx) => ({
+                ...act,
+                order: idx,
+              })),
+            }
+          }),
+        }
+      })
+
+      await saveItinerary({
+        ...currentItinerary,
+        destinations: updatedDestinations,
+      })
+    },
+    [currentItinerary, saveItinerary]
+  )
+
   const addCollaborator = useCallback(
     async (email: string) => {
       if (!currentItinerary || !user) return
@@ -578,6 +632,7 @@ export function useItinerary() {
     updateActivity,
     removeActivity,
     moveActivity,
+    reorderActivity,
     addCollaborator,
     removeCollaborator,
   }

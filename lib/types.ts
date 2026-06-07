@@ -4,6 +4,7 @@ export interface Activity {
   time?: string
   notes?: string
   url?: string
+  order: number
 }
 
 export interface DayPlan {

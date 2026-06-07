@@ -54,13 +54,19 @@ function getDayNumber(startDate: string, currentDate: string): number {
   )
 }
 
-// Sort activities: first those without time, then by time ascending
+// Sort activities: first those without time, then by time ascending, respecting custom order
 function sortActivities(activities: Activity[]): Activity[] {
   return [...activities].sort((a, b) => {
-    if (!a.time && !b.time) return 0
+    // Both have no time - use custom order
+    if (!a.time && !b.time) return a.order - b.order
+    // Only a has no time - put a first
     if (!a.time) return -1
+    // Only b has no time - put b first
     if (!b.time) return 1
-    return a.time.localeCompare(b.time)
+    // Both have time - sort by time, but respect order if times are equal
+    const timeCompare = a.time.localeCompare(b.time)
+    if (timeCompare !== 0) return timeCompare
+    return a.order - b.order
   })
 }
 
@@ -218,6 +224,12 @@ interface TimelineViewProps {
     toDestId: string,
     toDate: string
   ) => void
+  onReorderActivity: (
+    destinationId: string,
+    date: string,
+    activityId: string,
+    newIndex: number
+  ) => void
 }
 
 export function TimelineView({
@@ -228,6 +240,7 @@ export function TimelineView({
   onUpdateDestination,
   onRemoveDestination,
   onMoveActivity,
+  onReorderActivity,
 }: TimelineViewProps) {
   const [editingDest, setEditingDest] = useState<Destination | null>(null)
   const [editingAct, setEditingAct] = useState<EditingActivity | null>(null)
@@ -245,7 +258,8 @@ export function TimelineView({
   const handleDrop = (
     e: React.DragEvent<HTMLDivElement>,
     toDestId: string,
-    toDate: string
+    toDate: string,
+    sortedActivities: Activity[]
   ) => {
     e.preventDefault()
     const activityId = e.dataTransfer.getData("text/plain")
@@ -257,10 +271,20 @@ export function TimelineView({
 
     const [fromDestId, fromDate, fromActivityId] = parts
 
+    // Same day - reorder
     if (fromDestId === toDestId && fromDate === toDate) {
+      // Get the drop position based on mouse coordinates
+      const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+      const y = e.clientY - rect.top
+      const itemHeight = rect.height / sortedActivities.length || 50
+      let newIndex = Math.floor(y / itemHeight)
+      newIndex = Math.max(0, Math.min(newIndex, sortedActivities.length - 1))
+      
+      onReorderActivity(toDestId, toDate, fromActivityId, newIndex)
       return
     }
 
+    // Different day - move
     onMoveActivity(fromDestId, fromDate, fromActivityId, toDestId, toDate)
   }
 
@@ -429,7 +453,7 @@ export function TimelineView({
                         className="flex flex-col gap-2"
                         onDragOver={handleDragOver}
                         onDrop={(e) =>
-                          handleDrop(e, destination.id, dayPlan.date)
+                          handleDrop(e, destination.id, dayPlan.date, sortedActivities)
                         }
                       >
                         {sortedActivities.length === 0 && (
