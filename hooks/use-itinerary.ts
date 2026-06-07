@@ -513,6 +513,38 @@ export function useItinerary() {
     [currentItinerary, saveItinerary]
   )
 
+  const reorderActivities = useCallback(
+    async (
+      destinationId: string,
+      date: string,
+      sourceIndex: number,
+      targetIndex: number
+    ) => {
+      if (!currentItinerary) return
+
+      await saveItinerary({
+        ...currentItinerary,
+        destinations: currentItinerary.destinations.map((d) => {
+          if (d.id !== destinationId) return d
+          return {
+            ...d,
+            dayPlans: d.dayPlans.map((dp) => {
+              if (dp.date !== date) return dp
+              const newActivities = [...dp.activities]
+              const [movedActivity] = newActivities.splice(sourceIndex, 1)
+              newActivities.splice(targetIndex, 0, movedActivity)
+              return {
+                ...dp,
+                activities: newActivities,
+              }
+            }),
+          }
+        }),
+      })
+    },
+    [currentItinerary, saveItinerary]
+  )
+
   const addCollaborator = useCallback(
     async (email: string) => {
       if (!currentItinerary || !user) return
@@ -576,6 +608,7 @@ export function useItinerary() {
     updateActivity,
     removeActivity,
     moveActivity,
+    reorderActivities,
     addCollaborator,
     removeCollaborator,
   }
