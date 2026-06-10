@@ -69,12 +69,17 @@ function sortActivities(activities: Activity[]): Activity[] {
     const aHasTime = aMinutes !== null
     const bHasTime = bMinutes !== null
 
+    // Items sin horario primero
     if (aHasTime !== bHasTime) {
       return aHasTime ? 1 : -1
     }
 
-    if (!aHasTime && !bHasTime) return 0
+    // Items sin horario: ordenar por el número de orden
+    if (!aHasTime && !bHasTime) {
+      return (a.order ?? 0) - (b.order ?? 0)
+    }
 
+    // Items con horario: ordenar por hora
     return (aMinutes ?? 0) - (bMinutes ?? 0)
   })
 }
@@ -97,6 +102,13 @@ interface DraggedActivity {
   sourceDestinationId: string
   sourceDate: string
   activityId: string
+  isInternalReorder?: boolean
+}
+
+interface InternalDragState {
+  sourceActivityId: string
+  sourceDestinationId: string
+  sourceDate: string
 }
 
 interface TimelineViewProps {
@@ -124,6 +136,12 @@ interface TimelineViewProps {
     targetDate: string,
     activityId: string
   ) => void
+  onReorderActivities: (
+    destinationId: string,
+    date: string,
+    sourceActivityId: string,
+    targetActivityId: string
+  ) => void
   onUpdateDestination: (
     destinationId: string,
     updates: Partial<Omit<Destination, "id" | "dayPlans">>
@@ -137,22 +155,27 @@ export function TimelineView({
   onRemoveActivity,
   onUpdateActivity,
   onMoveActivity,
+  onReorderActivities,
   onUpdateDestination,
   onRemoveDestination,
 }: TimelineViewProps) {
   const [editingDest, setEditingDest] = useState<Destination | null>(null)
   const [editingAct, setEditingAct] = useState<EditingActivity | null>(null)
   const [draggedActivity, setDraggedActivity] = useState<DraggedActivity | null>(null)
+  const [internalDrag, setInternalDrag] = useState<InternalDragState | null>(null)
 
+  const mobileSelectionActive = draggedActivity !== null
 
   const handleDropActivity = (destinationId: string, date: string) => {
     if (!draggedActivity) return
 
-    const isSameSlot =
-      draggedActivity.sourceDestinationId === destinationId &&
-      draggedActivity.sourceDate === date
+    // Only move when dropping on a different day or destination.
+    // Internal reordering within the same day is handled by onDrop on each activity element.
+    const isDifferentSlot =
+      draggedActivity.sourceDestinationId !== destinationId ||
+      draggedActivity.sourceDate !== date
 
-    if (!isSameSlot) {
+    if (isDifferentSlot) {
       onMoveActivity(
         draggedActivity.sourceDestinationId,
         draggedActivity.sourceDate,
@@ -163,6 +186,29 @@ export function TimelineView({
     }
 
     setDraggedActivity(null)
+    setInternalDrag(null)
+  }
+
+  const toggleMobileSelection = (
+    sourceDestinationId: string,
+    sourceDate: string,
+    activityId: string
+  ) => {
+    const isAlreadySelected =
+      draggedActivity?.sourceDestinationId === sourceDestinationId &&
+      draggedActivity?.sourceDate === sourceDate &&
+      draggedActivity?.activityId === activityId
+
+    if (isAlreadySelected) {
+      setDraggedActivity(null)
+      return
+    }
+
+    setDraggedActivity({
+      sourceDestinationId,
+      sourceDate,
+      activityId,
+    })
   }
 
   if (destinations.length === 0) {
@@ -232,11 +278,7 @@ export function TimelineView({
                   <h2 className="font-display text-lg font-semibold text-foreground">
                     {destination.origin}
                   </h2>
-                  <ArrowRight className={`h-4 w-4 ${colors.text}`} />
-                  <h2 className="font-display text-lg font-semibold text-foreground">
-                    {destination.name}
-                  </h2>
-                  {destination.isConnection && destination.connection && (
+                    {destination.isConnection && destination.connection && (
                     <Badge
                       variant="secondary"
                       className="flex items-center gap-1 text-xs"
@@ -296,6 +338,14 @@ export function TimelineView({
             <div className="rounded-b-lg border border-t-0 border-border bg-card">
               {destination.dayPlans.map((dayPlan, dayIndex) => {
                 const sortedActivities = sortActivities(dayPlan.activities)
+                // Separate activities into those without time and those with time
+                const activitiesWithoutTime = sortedActivities.filter(
+                  (a) => !parseActivityTimeToMinutes(a.time)
+                )
+                const activitiesWithTime = sortedActivities.filter(
+                  (a) => parseActivityTimeToMinutes(a.time) !== null
+                )
+                
                 const dayNum = getDayNumber(
                   destination.startDate,
                   dayPlan.date
@@ -327,6 +377,11 @@ export function TimelineView({
                         <span className="text-sm font-semibold text-foreground capitalize">
                           {formatDate(dayPlan.date)}
                         </span>
+                        {mobileSelectionActive && (
+                          <span className="text-xs text-primary">
+                            Toca para mover aqui
+                          </span>
+                        )}
                       </div>
 
                       {/* Activities */}
@@ -334,8 +389,195 @@ export function TimelineView({
                         className="flex flex-col gap-2"
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => handleDropActivity(destination.id, dayPlan.date)}
+                        onClick={() => {
+                          if (mobileSelectionActive) {
+                            handleDropActivity(destination.id, dayPlan.date)
+                          }
+                        }}
                       >
-                        {sortedActivities.map((activity) => (
+                        {/* Activities without time (draggable within this section) */}
+                        {activitiesWithoutTime.map((activity) => {
+                          const isDraggingThis =
+                            internalDrag?.sourceDestinationId === destination.id &&
+                            internalDrag?.sourceDate === dayPlan.date &&
+                            internalDrag?.sourceActivityId === activity.id
+
+                          return (
+                            <div
+                              key={activity.id}
+                              className={`group flex items-start justify-between rounded-md border border-border px-3 py-2 transition-colors cursor-grab active:cursor-grabbing ${
+                                isDraggingThis
+                                  ? "bg-primary/10 border-primary/50"
+                                  : "bg-muted/40 hover:bg-muted"
+                              }`}
+                              draggable
+                              onDragStart={() => {
+                                setInternalDrag({
+                                  sourceActivityId: activity.id,
+                                  sourceDestinationId: destination.id,
+                                  sourceDate: dayPlan.date,
+                                })
+                                setDraggedActivity({
+                                  sourceDestinationId: destination.id,
+                                  sourceDate: dayPlan.date,
+                                  activityId: activity.id,
+                                  isInternalReorder: true,
+                                })
+                              }}
+                              onDragEnd={() => {
+                                setDraggedActivity(null)
+                                setInternalDrag(null)
+                              }}
+                              onDragOver={(e) => {
+                                e.preventDefault()
+                                e.currentTarget.classList.add("bg-primary/20")
+                              }}
+                              onDragLeave={(e) => {
+                                e.currentTarget.classList.remove("bg-primary/20")
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                e.currentTarget.classList.remove("bg-primary/20")
+
+                                // Case 1: internal reorder within the same day
+                                if (
+                                  internalDrag?.sourceDestinationId === destination.id &&
+                                  internalDrag?.sourceDate === dayPlan.date &&
+                                  internalDrag?.sourceActivityId !== activity.id
+                                ) {
+                                  onReorderActivities(
+                                    destination.id,
+                                    dayPlan.date,
+                                    internalDrag.sourceActivityId,
+                                    activity.id
+                                  )
+                                  setInternalDrag(null)
+                                  setDraggedActivity(null)
+                                  return
+                                }
+
+                                // Case 2: dragging from a different day/destination — move to this day
+                                if (
+                                  draggedActivity &&
+                                  (draggedActivity.sourceDestinationId !== destination.id ||
+                                    draggedActivity.sourceDate !== dayPlan.date)
+                                ) {
+                                  onMoveActivity(
+                                    draggedActivity.sourceDestinationId,
+                                    draggedActivity.sourceDate,
+                                    destination.id,
+                                    dayPlan.date,
+                                    draggedActivity.activityId
+                                  )
+                                  setDraggedActivity(null)
+                                  setInternalDrag(null)
+                                }
+                              }}
+                            >
+                              <div className="flex items-start gap-2 min-w-0 flex-1">
+                                <MapPin
+                                  className={`mt-0.5 h-3.5 w-3.5 flex-shrink-0 ${colors.text}`}
+                                />
+                                <div className="flex flex-col min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm font-medium text-foreground">
+                                      {activity.name}
+                                    </span>
+                                    {activity.url && (
+                                      <a
+                                        href={activity.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors"
+                                        aria-label={`Ver ${activity.name} en el mapa`}
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <ExternalLink className="h-3 w-3" />
+                                      </a>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {activity.notes && (
+                                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                        <StickyNote className="h-3 w-3" />
+                                        {activity.notes}
+                                      </span>
+                                    )}
+                                    {activity.url && (
+                                      <a
+                                        href={activity.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-1 text-xs text-primary hover:underline truncate max-w-[200px]"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                                        <span className="truncate">Ver en mapa</span>
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-0.5 flex-shrink-0 ml-2 opacity-100 md:opacity-0 transition-opacity md:group-hover:opacity-100">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    toggleMobileSelection(
+                                      destination.id,
+                                      dayPlan.date,
+                                      activity.id
+                                    )
+                                  }
+                                  className={`h-6 px-2 text-xs ${
+                                    draggedActivity?.activityId === activity.id &&
+                                    draggedActivity?.sourceDestinationId === destination.id &&
+                                    draggedActivity?.sourceDate === dayPlan.date
+                                      ? "text-primary"
+                                      : "text-muted-foreground"
+                                  }`}
+                                  aria-label={`Seleccionar actividad ${activity.name} para mover`}
+                                >
+                                  Mover
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setEditingAct({
+                                      destinationId: destination.id,
+                                      date: dayPlan.date,
+                                      activity,
+                                    })
+                                  }
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                                  aria-label={`Editar actividad ${activity.name}`}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    onRemoveActivity(
+                                      destination.id,
+                                      dayPlan.date,
+                                      activity.id
+                                    )
+                                  }
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                  aria-label={`Eliminar actividad ${activity.name}`}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        })}
+
+                        {/* Activities with time */}
+                        {activitiesWithTime.map((activity) => (
                           <div
                             key={activity.id}
                             className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted cursor-grab active:cursor-grabbing"
@@ -345,9 +587,12 @@ export function TimelineView({
                                 sourceDestinationId: destination.id,
                                 sourceDate: dayPlan.date,
                                 activityId: activity.id,
+                                isInternalReorder: false,
                               })
                             }
                             onDragEnd={() => setDraggedActivity(null)}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={() => handleDropActivity(destination.id, dayPlan.date)}
                           >
                             <div className="flex items-start gap-2 min-w-0 flex-1">
                               <MapPin
@@ -399,7 +644,28 @@ export function TimelineView({
                                 </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 flex-shrink-0 ml-2">
+                            <div className="flex items-center gap-0.5 flex-shrink-0 ml-2 opacity-100 md:opacity-0 transition-opacity md:group-hover:opacity-100">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  toggleMobileSelection(
+                                    destination.id,
+                                    dayPlan.date,
+                                    activity.id
+                                  )
+                                }
+                                className={`h-6 px-2 text-xs ${
+                                  draggedActivity?.activityId === activity.id &&
+                                  draggedActivity?.sourceDestinationId === destination.id &&
+                                  draggedActivity?.sourceDate === dayPlan.date
+                                    ? "text-primary"
+                                    : "text-muted-foreground"
+                                }`}
+                                aria-label={`Seleccionar actividad ${activity.name} para mover`}
+                              >
+                                Mover
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
