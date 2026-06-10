@@ -7,6 +7,7 @@ import {
   Trash2,
   Plane,
   ArrowRight,
+  ArrowLeftRight,
   StickyNote,
   Pencil,
   ExternalLink,
@@ -201,6 +202,7 @@ export function TimelineView({
 
     if (isAlreadySelected) {
       setDraggedActivity(null)
+      setInternalDrag(null)
       return
     }
 
@@ -209,6 +211,49 @@ export function TimelineView({
       sourceDate,
       activityId,
     })
+  }
+
+  // Called when tapping a no-time activity while another activity is selected (mobile reorder/move)
+  const handleMobileTapNoTimeActivity = (
+    e: React.MouseEvent,
+    destinationId: string,
+    date: string,
+    targetActivityId: string
+  ) => {
+    if (!draggedActivity) return
+
+    e.stopPropagation()
+
+    const isSameDay =
+      draggedActivity.sourceDestinationId === destinationId &&
+      draggedActivity.sourceDate === date
+    const isSameActivity = draggedActivity.activityId === targetActivityId
+
+    if (isSameActivity) {
+      setDraggedActivity(null)
+      setInternalDrag(null)
+      return
+    }
+
+    if (isSameDay) {
+      onReorderActivities(
+        destinationId,
+        date,
+        draggedActivity.activityId,
+        targetActivityId
+      )
+    } else {
+      onMoveActivity(
+        draggedActivity.sourceDestinationId,
+        draggedActivity.sourceDate,
+        destinationId,
+        date,
+        draggedActivity.activityId
+      )
+    }
+
+    setDraggedActivity(null)
+    setInternalDrag(null)
   }
 
   if (destinations.length === 0) {
@@ -402,14 +447,44 @@ export function TimelineView({
                             internalDrag?.sourceDate === dayPlan.date &&
                             internalDrag?.sourceActivityId === activity.id
 
+                          const isMobileSelected =
+                            draggedActivity?.activityId === activity.id &&
+                            draggedActivity?.sourceDestinationId === destination.id &&
+                            draggedActivity?.sourceDate === dayPlan.date
+
+                          const isMobileSwapTarget =
+                            mobileSelectionActive &&
+                            !isMobileSelected &&
+                            draggedActivity?.sourceDestinationId === destination.id &&
+                            draggedActivity?.sourceDate === dayPlan.date
+
+                          const isMobileMoveTarget =
+                            mobileSelectionActive &&
+                            !isMobileSelected &&
+                            (draggedActivity?.sourceDestinationId !== destination.id ||
+                              draggedActivity?.sourceDate !== dayPlan.date)
+
                           return (
                             <div
                               key={activity.id}
-                              className={`group flex items-start justify-between rounded-md border border-border px-3 py-2 transition-colors cursor-grab active:cursor-grabbing ${
-                                isDraggingThis
+                              className={`group flex items-start justify-between rounded-md border px-3 py-2 transition-colors cursor-grab active:cursor-grabbing ${
+                                isDraggingThis || isMobileSelected
                                   ? "bg-primary/10 border-primary/50"
-                                  : "bg-muted/40 hover:bg-muted"
+                                  : isMobileSwapTarget || isMobileMoveTarget
+                                  ? "bg-accent/10 border-accent/50"
+                                  : "bg-muted/40 border-border hover:bg-muted"
                               }`}
+                              onClick={
+                                mobileSelectionActive && !isMobileSelected
+                                  ? (e) =>
+                                      handleMobileTapNoTimeActivity(
+                                        e,
+                                        destination.id,
+                                        dayPlan.date,
+                                        activity.id
+                                      )
+                                  : undefined
+                              }
                               draggable
                               onDragStart={() => {
                                 setInternalDrag({
@@ -520,20 +595,54 @@ export function TimelineView({
                                 </div>
                               </div>
                               <div className="flex items-center gap-0.5 flex-shrink-0 ml-2 opacity-100 md:opacity-0 transition-opacity md:group-hover:opacity-100">
+                                {isMobileSwapTarget ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) =>
+                                      handleMobileTapNoTimeActivity(
+                                        e,
+                                        destination.id,
+                                        dayPlan.date,
+                                        activity.id
+                                      )
+                                    }
+                                    className="h-6 w-6 p-0 text-accent"
+                                    aria-label={`Intercambiar posición con ${activity.name}`}
+                                  >
+                                    <ArrowLeftRight className="h-3 w-3" />
+                                  </Button>
+                                ) : isMobileMoveTarget ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) =>
+                                      handleMobileTapNoTimeActivity(
+                                        e,
+                                        destination.id,
+                                        dayPlan.date,
+                                        activity.id
+                                      )
+                                    }
+                                    className="h-6 w-6 p-0 text-accent"
+                                    aria-label={`Mover aquí junto a ${activity.name}`}
+                                  >
+                                    <ArrowRight className="h-3 w-3" />
+                                  </Button>
+                                ) : (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() =>
+                                  onClick={(e) => {
+                                    e.stopPropagation()
                                     toggleMobileSelection(
                                       destination.id,
                                       dayPlan.date,
                                       activity.id
                                     )
-                                  }
+                                  }}
                                   className={`h-6 px-2 text-xs ${
-                                    draggedActivity?.activityId === activity.id &&
-                                    draggedActivity?.sourceDestinationId === destination.id &&
-                                    draggedActivity?.sourceDate === dayPlan.date
+                                    isMobileSelected
                                       ? "text-primary"
                                       : "text-muted-foreground"
                                   }`}
@@ -541,6 +650,7 @@ export function TimelineView({
                                 >
                                   Mover
                                 </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="sm"
