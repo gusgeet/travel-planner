@@ -28,6 +28,34 @@ function generateId() {
   return Math.random().toString(36).substring(2, 11)
 }
 
+// Initialize order for activities without time if they don't have one
+function initializeActivityOrders(itinerary: Itinerary): Itinerary {
+  return {
+    ...itinerary,
+    destinations: itinerary.destinations.map(dest => ({
+      ...dest,
+      dayPlans: dest.dayPlans.map(dayPlan => {
+        let orderCounter = 0
+        return {
+          ...dayPlan,
+          activities: dayPlan.activities.map(activity => {
+            // If activity has no time and no order, assign one
+            if (!activity.time && activity.order === undefined) {
+              return { ...activity, order: orderCounter++ }
+            }
+            // If activity has no time but has an order, just increment counter
+            if (!activity.time && activity.order !== undefined) {
+              orderCounter = Math.max(orderCounter, (activity.order ?? 0) + 1)
+            }
+            return activity
+          })
+        }
+      })
+    }))
+  }
+}
+
+
 // Recursively remove undefined values so Firestore doesn't reject them
 function stripUndefined<T>(obj: T): T {
   if (Array.isArray(obj)) {
@@ -113,7 +141,9 @@ export function useItinerary() {
         id: d.id,
         ...d.data(),
       })) as Itinerary[]
-      setOwnedItineraries(results)
+      // Initialize order for existing activities without time
+      const initializedResults = results.map(initializeActivityOrders)
+      setOwnedItineraries(initializedResults)
       setLoading(false)
     })
 
@@ -134,7 +164,9 @@ export function useItinerary() {
         id: d.id,
         ...d.data(),
       })) as Itinerary[]
-      setSharedItineraries(results)
+      // Initialize order for existing activities without time
+      const initializedResults = results.map(initializeActivityOrders)
+      setSharedItineraries(initializedResults)
     })
 
     return unsub
@@ -379,7 +411,26 @@ export function useItinerary() {
   const addActivity = useCallback(
     async (destinationId: string, date: string, activity: Omit<Activity, "id">) => {
       if (!currentItinerary) return
-      const newActivity: Activity = { ...activity, id: generateId() }
+      
+      // Get the maximum order number for activities without time on this day
+      const dayPlan = currentItinerary.destinations
+        .find(d => d.id === destinationId)
+        ?.dayPlans.find(dp => dp.date === date)
+      
+      const activitiesWithoutTime = dayPlan?.activities.filter(
+        a => !a.time
+      ) || []
+      
+      const maxOrder = activitiesWithoutTime.length > 0
+        ? Math.max(...activitiesWithoutTime.map(a => a.order ?? 0))
+        : -1
+      
+      const newActivity: Activity = {
+        ...activity,
+        id: generateId(),
+        order: activity.time ? undefined : maxOrder + 1,
+      }
+      
       await saveItinerary({
         ...currentItinerary,
         destinations: currentItinerary.destinations.map((d) => {
@@ -513,6 +564,57 @@ export function useItinerary() {
     [currentItinerary, saveItinerary]
   )
 
+  const reorderActivities = useCallback(
+    async (
+      destinationId: string,
+      date: string,
+      sourceActivityId: string,
+      targetActivityId: string
+    ) => {
+      if (!currentItinerary) return
+
+      await saveItinerary({
+        ...currentItinerary,
+        destinations: currentItinerary.destinations.map((d) => {
+          if (d.id !== destinationId) return d
+          return {
+            ...d,
+            dayPlans: d.dayPlans.map((dp) => {
+              if (dp.date !== date) return dp
+              
+              // Find the source and target activities by ID
+              const sourceActivity = dp.activities.find(a => a.id === sourceActivityId)
+              const targetActivity = dp.activities.find(a => a.id === targetActivityId)
+              
+              if (!sourceActivity || !targetActivity) return dp
+              
+              // Swap order numbers
+              const sourceOrder = sourceActivity.order ?? 0
+              const targetOrder = targetActivity.order ?? 0
+              
+              // Update activities with swapped orders
+              const updatedActivities = dp.activities.map(a => {
+                if (a.id === sourceActivityId) {
+                  return { ...a, order: targetOrder }
+                }
+                if (a.id === targetActivityId) {
+                  return { ...a, order: sourceOrder }
+                }
+                return a
+              })
+              
+              return {
+                ...dp,
+                activities: updatedActivities,
+              }
+            }),
+          }
+        }),
+      })
+    },
+    [currentItinerary, saveItinerary]
+  )
+
   const addCollaborator = useCallback(
     async (email: string) => {
       if (!currentItinerary || !user) return
@@ -576,6 +678,7 @@ export function useItinerary() {
     updateActivity,
     removeActivity,
     moveActivity,
+    reorderActivities,
     addCollaborator,
     removeCollaborator,
   }
