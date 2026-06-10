@@ -568,8 +568,8 @@ export function useItinerary() {
     async (
       destinationId: string,
       date: string,
-      sourceIndex: number,
-      targetIndex: number
+      sourceActivityId: string,
+      targetActivityId: string
     ) => {
       if (!currentItinerary) return
 
@@ -582,14 +582,9 @@ export function useItinerary() {
             dayPlans: d.dayPlans.map((dp) => {
               if (dp.date !== date) return dp
               
-              // Get activities without time, sorted by order
-              const activitiesWithoutTime = dp.activities
-                .filter(a => !a.time)
-                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-              
-              // Get the source and target activities
-              const sourceActivity = activitiesWithoutTime[sourceIndex]
-              const targetActivity = activitiesWithoutTime[targetIndex]
+              // Find the source and target activities by ID
+              const sourceActivity = dp.activities.find(a => a.id === sourceActivityId)
+              const targetActivity = dp.activities.find(a => a.id === targetActivityId)
               
               if (!sourceActivity || !targetActivity) return dp
               
@@ -599,10 +594,10 @@ export function useItinerary() {
               
               // Update activities with swapped orders
               const updatedActivities = dp.activities.map(a => {
-                if (a.id === sourceActivity.id) {
+                if (a.id === sourceActivityId) {
                   return { ...a, order: targetOrder }
                 }
-                if (a.id === targetActivity.id) {
+                if (a.id === targetActivityId) {
                   return { ...a, order: sourceOrder }
                 }
                 return a

@@ -106,7 +106,7 @@ interface DraggedActivity {
 }
 
 interface InternalDragState {
-  sourceIndex: number
+  sourceActivityId: string
   sourceDestinationId: string
   sourceDate: string
 }
@@ -139,8 +139,8 @@ interface TimelineViewProps {
   onReorderActivities: (
     destinationId: string,
     date: string,
-    sourceIndex: number,
-    targetIndex: number
+    sourceActivityId: string,
+    targetActivityId: string
   ) => void
   onUpdateDestination: (
     destinationId: string,
@@ -393,11 +393,11 @@ export function TimelineView({
                         }}
                       >
                         {/* Activities without time (draggable within this section) */}
-                        {activitiesWithoutTime.map((activity, index) => {
+                        {activitiesWithoutTime.map((activity) => {
                           const isDraggingThis =
                             internalDrag?.sourceDestinationId === destination.id &&
                             internalDrag?.sourceDate === dayPlan.date &&
-                            internalDrag?.sourceIndex === index
+                            internalDrag?.sourceActivityId === activity.id
 
                           return (
                             <div
@@ -410,7 +410,7 @@ export function TimelineView({
                               draggable
                               onDragStart={() => {
                                 setInternalDrag({
-                                  sourceIndex: index,
+                                  sourceActivityId: activity.id,
                                   sourceDestinationId: destination.id,
                                   sourceDate: dayPlan.date,
                                 })
@@ -439,13 +439,13 @@ export function TimelineView({
                                 if (
                                   internalDrag?.sourceDestinationId === destination.id &&
                                   internalDrag?.sourceDate === dayPlan.date &&
-                                  internalDrag?.sourceIndex !== index
+                                  internalDrag?.sourceActivityId !== activity.id
                                 ) {
                                   onReorderActivities(
                                     destination.id,
                                     dayPlan.date,
-                                    internalDrag.sourceIndex,
-                                    index
+                                    internalDrag.sourceActivityId,
+                                    activity.id
                                   )
                                   setInternalDrag(null)
                                   setDraggedActivity(null)
