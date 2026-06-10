@@ -169,13 +169,13 @@ export function TimelineView({
   const handleDropActivity = (destinationId: string, date: string) => {
     if (!draggedActivity) return
 
-    // Only handle drag and drop between different days/destinations
-    // Internal reordering within same day is handled by onDrop in the activity element
+    // Only move when dropping on a different day or destination.
+    // Internal reordering within the same day is handled by onDrop on each activity element.
     const isDifferentSlot =
       draggedActivity.sourceDestinationId !== destinationId ||
       draggedActivity.sourceDate !== date
 
-    if (isDifferentSlot && !draggedActivity.isInternalReorder) {
+    if (isDifferentSlot) {
       onMoveActivity(
         draggedActivity.sourceDestinationId,
         draggedActivity.sourceDate,
@@ -186,6 +186,7 @@ export function TimelineView({
     }
 
     setDraggedActivity(null)
+    setInternalDrag(null)
   }
 
   const toggleMobileSelection = (
@@ -436,8 +437,10 @@ export function TimelineView({
                               }}
                               onDrop={(e) => {
                                 e.preventDefault()
+                                e.stopPropagation()
                                 e.currentTarget.classList.remove("bg-primary/20")
 
+                                // Case 1: internal reorder within the same day
                                 if (
                                   internalDrag?.sourceDestinationId === destination.id &&
                                   internalDrag?.sourceDate === dayPlan.date &&
@@ -451,6 +454,24 @@ export function TimelineView({
                                   )
                                   setInternalDrag(null)
                                   setDraggedActivity(null)
+                                  return
+                                }
+
+                                // Case 2: dragging from a different day/destination — move to this day
+                                if (
+                                  draggedActivity &&
+                                  (draggedActivity.sourceDestinationId !== destination.id ||
+                                    draggedActivity.sourceDate !== dayPlan.date)
+                                ) {
+                                  onMoveActivity(
+                                    draggedActivity.sourceDestinationId,
+                                    draggedActivity.sourceDate,
+                                    destination.id,
+                                    dayPlan.date,
+                                    draggedActivity.activityId
+                                  )
+                                  setDraggedActivity(null)
+                                  setInternalDrag(null)
                                 }
                               }}
                             >
