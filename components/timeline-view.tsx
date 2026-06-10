@@ -74,9 +74,9 @@ function sortActivities(activities: Activity[]): Activity[] {
       return aHasTime ? 1 : -1
     }
 
-    // Items sin horario: respetar orden personalizado o mantener orden original
+    // Items sin horario: ordenar por el número de orden
     if (!aHasTime && !bHasTime) {
-      return 0
+      return (a.order ?? 0) - (b.order ?? 0)
     }
 
     // Items con horario: ordenar por hora
