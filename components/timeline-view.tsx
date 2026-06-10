@@ -169,11 +169,13 @@ export function TimelineView({
   const handleDropActivity = (destinationId: string, date: string) => {
     if (!draggedActivity) return
 
-    const isSameSlot =
-      draggedActivity.sourceDestinationId === destinationId &&
-      draggedActivity.sourceDate === date
+    // Only handle drag and drop between different days/destinations
+    // Internal reordering within same day is handled by onDrop in the activity element
+    const isDifferentSlot =
+      draggedActivity.sourceDestinationId !== destinationId ||
+      draggedActivity.sourceDate !== date
 
-    if (!isSameSlot) {
+    if (isDifferentSlot && !draggedActivity.isInternalReorder) {
       onMoveActivity(
         draggedActivity.sourceDestinationId,
         draggedActivity.sourceDate,
@@ -568,6 +570,8 @@ export function TimelineView({
                               })
                             }
                             onDragEnd={() => setDraggedActivity(null)}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={() => handleDropActivity(destination.id, dayPlan.date)}
                           >
                             <div className="flex items-start gap-2 min-w-0 flex-1">
                               <MapPin
