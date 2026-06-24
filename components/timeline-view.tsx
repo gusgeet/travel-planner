@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import {
   MapPin,
   Clock,
@@ -84,6 +84,12 @@ interface EditingActivity {
   activity: Activity
 }
 
+interface DraggedActivityContext {
+  fromDestId: string
+  fromDate: string
+  fromActivityId: string
+}
+
 interface DraggableActivityItemProps {
   activity: Activity
   destinationId: string
@@ -91,6 +97,7 @@ interface DraggableActivityItemProps {
   colors: typeof DESTINATION_COLORS[0]
   onEdit: (dest: string, date: string, activity: Activity) => void
   onRemove: (dest: string, date: string, activityId: string) => void
+  onDragStart: (context: DraggedActivityContext) => void
 }
 
 function DraggableActivityItem({
@@ -100,17 +107,23 @@ function DraggableActivityItem({
   colors,
   onEdit,
   onRemove,
+  onDragStart,
 }: DraggableActivityItemProps) {
-  const activityId = `${destinationId}-${date}-${activity.id}`
-
   return (
     <div
       draggable
-      id={activityId}
       className="group flex items-start justify-between rounded-md border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted cursor-grab active:cursor-grabbing"
       onDragStart={(e) => {
-        e.dataTransfer!.effectAllowed = "move"
-        e.dataTransfer!.setData("text/plain", activityId)
+        const context: DraggedActivityContext = {
+          fromDestId: destinationId,
+          fromDate: date,
+          fromActivityId: activity.id,
+        }
+
+        onDragStart(context)
+
+        e.dataTransfer.effectAllowed = "move"
+        e.dataTransfer.setData("text/plain", JSON.stringify(context))
       }}
     >
       <div className="flex items-start gap-2 min-w-0 flex-1">
@@ -244,16 +257,25 @@ export function TimelineView({
 }: TimelineViewProps) {
   const [editingDest, setEditingDest] = useState<Destination | null>(null)
   const [editingAct, setEditingAct] = useState<EditingActivity | null>(null)
-  const [draggedActivity, setDraggedActivity] = useState<Activity | null>(null)
+  const [draggedActivityContext, setDraggedActivityContext] =
+    useState<DraggedActivityContext | null>(null)
+  const draggedActivityContextRef = useRef<DraggedActivityContext | null>(null)
 
   const handleDragEnd = (event: DragEndEvent) => {
     // Not used with native drag and drop, kept for backwards compatibility
+    setDraggedActivityContext(null)
+    draggedActivityContextRef.current = null
   }
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = "move"
   }
+
+  const handleNativeDragStart = useCallback((context: DraggedActivityContext) => {
+    draggedActivityContextRef.current = context
+    setDraggedActivityContext(context)
+  }, [])
 
   const handleDrop = (
     e: React.DragEvent<HTMLDivElement>,
@@ -262,14 +284,15 @@ export function TimelineView({
     sortedActivities: Activity[]
   ) => {
     e.preventDefault()
-    const activityId = e.dataTransfer.getData("text/plain")
 
-    if (!activityId) return
+    const fromContext = draggedActivityContextRef.current || draggedActivityContext
 
-    const parts = activityId.split("-")
-    if (parts.length !== 3) return
+    setDraggedActivityContext(null)
+    draggedActivityContextRef.current = null
 
-    const [fromDestId, fromDate, fromActivityId] = parts
+    if (!fromContext) return
+
+    const { fromDestId, fromDate, fromActivityId } = fromContext
 
     // Same day - reorder
     if (fromDestId === toDestId && fromDate === toDate) {
@@ -470,6 +493,7 @@ export function TimelineView({
                               setEditingAct({ destinationId: destId, date, activity: act })
                             }
                             onRemove={onRemoveActivity}
+                            onDragStart={handleNativeDragStart}
                           />
                         ))}
 
